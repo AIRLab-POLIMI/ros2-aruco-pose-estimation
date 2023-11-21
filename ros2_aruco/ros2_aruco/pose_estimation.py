@@ -28,7 +28,6 @@ def pose_estimation(frame, aruco_dict_type, marker_size, matrix_coefficients, di
     markers - ArucoMarkers message containing markers id number and pose
     '''
 
-    # gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     # cv2.aruco_dict = cv2.aruco.Dictionary_get(aruco_dict_type)
     parameters = cv2.aruco.DetectorParameters_create()
 

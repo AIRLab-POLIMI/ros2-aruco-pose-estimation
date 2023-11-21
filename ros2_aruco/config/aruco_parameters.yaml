@@ -1,6 +1,6 @@
 /aruco_node:
   ros__parameters:
-    marker_size: 0.20
+    marker_size: 0.08 # Size of the markers in meters
     aruco_dictionary_id: DICT_7X7_250
     image_topic: /camera/color/image_raw
     camera_info_topic: /camera/color/camera_info
