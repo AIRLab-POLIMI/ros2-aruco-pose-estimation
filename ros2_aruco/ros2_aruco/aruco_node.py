@@ -16,16 +16,21 @@ Published Topics:
 	   Provides an array of all poses along with the corresponding
 	   marker ids.
 
-Parameters:
-	marker_size - size of the markers in meters (default .0625)
-	aruco_dictionary_id - dictionary that was used to generate markers
-						  (default DICT_5X5_250)
-	image_topic - image topic to subscribe to (default /camera/image_raw)
-	camera_info_topic - camera info topic to subscribe to
-						 (default /camera/camera_info)
+	/aruco_image (sensor_msgs.msg.Image)
+	   Annotated image with marker locations and ids, with markers drawn on it
 
-Author: Nathan Sprague
-Version: 10/26/2020
+Parameters:
+	marker_size - size of the markers in meters (default .065)
+	aruco_dictionary_id - dictionary that was used to generate markers (default DICT_5X5_250)
+	image_topic - image topic to subscribe to (default /camera/color/image_raw)
+	camera_info_topic - camera info topic to subscribe to (default /camera/camera_info)
+	camera_frame - camera optical frame to use (default "camera_depth_optical_frame")
+	detected_markers_topic - topic to publish detected markers (default /aruco_markers)
+	markers_visualization_topic - topic to publish markers visualization (default /aruco_poses)
+	display_image_topic - topic to publish annotated image (default /aruco_image)
+
+Author: Simone Giampà
+Version: 2024-01-29
 
 """
 
@@ -101,7 +106,7 @@ class ArucoNode(rclpy.node.Node):
 			),
 		)
 
-		# parse values in their format
+		# read parameters from aruco_params.yaml and store them
 		self.marker_size = (
 			self.get_parameter(
 				"marker_size").get_parameter_value().double_value
@@ -131,6 +136,22 @@ class ArucoNode(rclpy.node.Node):
 				"camera_frame").get_parameter_value().string_value
 		)
 
+		# Output topics 
+		detected_markers_topic = (
+			self.get_parameter(
+				"detected_markers_topic").get_parameter_value().string_value
+		)
+
+		markers_visualization_topic = (
+			self.get_parameter(
+				"markers_visualization_topic").get_parameter_value().string_value
+		)
+
+		display_image_topic = (
+			self.get_parameter(
+				"display_image_topic").get_parameter_value().string_value
+		)
+
 		# Make sure we have a valid dictionary id:
 		try:
 			dictionary_id = cv2.aruco.__getattribute__(dictionary_id_name)
@@ -154,9 +175,9 @@ class ArucoNode(rclpy.node.Node):
 		)
 
 		# Set up publishers
-		self.poses_pub = self.create_publisher(PoseArray, "aruco_poses", 10)
-		self.markers_pub = self.create_publisher(ArucoMarkers, "aruco_markers", 10)
-		self.image_pub = self.create_publisher(Image, "aruco_image", 10)
+		self.poses_pub = self.create_publisher(PoseArray, markers_visualization_topic, 10)
+		self.markers_pub = self.create_publisher(ArucoMarkers, detected_markers_topic, 10)
+		self.image_pub = self.create_publisher(Image, display_image_topic, 10)
 
 		# Set up fields for camera parameters
 		self.info_msg = None
@@ -205,6 +226,7 @@ class ArucoNode(rclpy.node.Node):
 		markers.header.stamp = img_msg.header.stamp
 		pose_array.header.stamp = img_msg.header.stamp
 
+		# call the pose estimation function
 		frame, pose_array, markers = pose_estimation(frame=cv_image, aruco_dict_type=self.aruco_dictionary, 
 													 marker_size=self.marker_size, matrix_coefficients=self.intrinsic_mat,
 													 distortion_coefficients=self.distortion, pose_array=pose_array, markers=markers)
