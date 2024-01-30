@@ -32,20 +32,6 @@ def generate_launch_description():
         arguments=['-d', rviz_file]
     )
 
-    cam_feed_node = Node(
-        package='ros2_aruco',
-        executable='cam_feed',
-        output='screen',
-        emulate_tty=True
-    )
-    
-    static_tf = Node(
-        package='tf2_ros',
-        namespace='world_to_cam',
-        executable='static_transform_publisher',
-        arguments=["0", "0", "0", "0", "0", "0", "world", "camera_frame"]
-    )
-
     return LaunchDescription([
         aruco_node, rviz2_node
     ])

@@ -105,6 +105,34 @@ class ArucoNode(rclpy.node.Node):
 				description="Camera optical frame to use.",
 			),
 		)
+		
+		self.declare_parameter(
+			name="detected_markers_topic",
+			value="/aruco_markers",
+			descriptor=ParameterDescriptor(
+				type=ParameterType.PARAMETER_STRING,
+				description="Topic to publish detected markers as array of marker ids and poses",
+			),
+		)
+	
+		self.declare_parameter(
+			name="markers_visualization_topic",
+			value="/aruco_poses",
+			descriptor=ParameterDescriptor(
+				type=ParameterType.PARAMETER_STRING,
+				description="Topic to publish markers as pose array",
+			),
+		)
+		
+		self.declare_parameter( 
+			name="display_image_topic",
+			value="/aruco_image",
+			descriptor=ParameterDescriptor(
+				type=ParameterType.PARAMETER_STRING,
+				description="Topic to publish annotated images with markers drawn on them",
+			),
+		)
+	
 
 		# read parameters from aruco_params.yaml and store them
 		self.marker_size = (
