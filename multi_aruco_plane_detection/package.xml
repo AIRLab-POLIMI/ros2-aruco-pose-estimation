@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+    <name>multi_aruco_plane_detection</name>
+    <version>0.1.0</version>
+    <description> Given a multi aruco markers system, find the best fitting plane over which the
+        markers lie on. Assuming the markers are placed on the same plane, overcome the problem of
+        the markers not being perfectly aligned, caused by the noise in the aruco pose estimation
+        process. </description>
+
+    <maintainer email="simone.giampa@mail.polimi.it">Simone Giampà</maintainer>
+    <license>AIRLAB</license>
+    <url type="website">polimi.it</url>
+    <url type="repository">https://github.com/SimonGiampy/ros2-igus-rebel</url>
+    <author email="simone.giampa@mail.polimi.it">Simone Giampà</author>
+
+    <buildtool_depend>ament_cmake</buildtool_depend>
+
+    <buildtool_depend>eigen3_cmake_module</buildtool_depend>
+    <build_depend>eigen</build_depend>
+    <buildtool_export_depend>eigen3_cmake_module</buildtool_export_depend>
+    <build_export_depend>eigen</build_export_depend>
+
+    <depend>rviz2</depend>
+
+    <depend>rclcpp</depend>
+    <depend>ros2_aruco_interfaces</depend>
+
+    <test_depend>ament_lint_auto</test_depend>
+    <test_depend>ament_lint_common</test_depend>
+
+    <export>
+        <build_type>ament_cmake</build_type>
+    </export>
+</package>
