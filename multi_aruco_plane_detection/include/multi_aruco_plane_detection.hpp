@@ -37,7 +37,7 @@ public:
 	// compute plane passing through 3 given points
 	Eigen::Quaterniond computeNormalOrientation(const Eigen::Vector3d &p1, const Eigen::Vector3d &p2, const Eigen::Vector3d &p3);
 
-	Eigen::Vector3d planeFittingWithRANSAC(const Eigen::MatrixXd &points);
+	Eigen::Vector4d planeFittingWithRANSAC(const Eigen::MatrixXd &points);
 
 	// compute best fitting plane passing through all given points using SVD
 	Eigen::Vector3d computeNormalWithSVD(const Eigen::MatrixXd &points);
@@ -46,7 +46,9 @@ public:
 
 	double computeDistance(const Eigen::Vector4d &plane, const Eigen::Vector3d &point);
 
-	void publishQuaternionAsPlane(const Eigen::Quaterniond quaternion, geometry_msgs::msg::Point placement);
+	void visualizeQuaternionAsPlane(const Eigen::Quaterniond quaternion, geometry_msgs::msg::Point placement);
+
+    void visualizeVector4dWithPlaneAndNormal(Eigen::Vector4d plane);
 
 	Eigen::Vector4d findPlaneEquation(const Eigen::Vector3d &point1, const Eigen::Vector3d &point2,
 									  const Eigen::Vector3d &point3);
