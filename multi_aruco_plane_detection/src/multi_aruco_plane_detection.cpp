@@ -44,12 +44,6 @@ void MultiArucoPlaneDetection::marker_callback(const ros2_aruco_interfaces::msg:
 
 	RCLCPP_INFO(this->get_logger(), "Received %d markers", num_markers);
 
-	/*
-	// compute the normal orientation of the plane with first method
-	Eigen::Quaterniond q = computeNormalOrientation(p1, p2, p3);
-	publishQuaternionAsArrow(q, placement);
-	*/
-
 	// create a matrix of points from the marker positions (x, y, z coordinates)
 	Eigen::MatrixXd points(3, num_markers);
 	for (int i = 0; i < num_markers; i++) {
@@ -62,11 +56,13 @@ void MultiArucoPlaneDetection::marker_callback(const ros2_aruco_interfaces::msg:
 
 	// compute the normal orientation of the plane
 	// Eigen::Vector3d normal = computeNormalWithSVD(points);
-	Eigen::Vector4d plane = planeFittingWithRANSAC(points);
+	Eigen::Vector3d normal3d = planeFittingWithRANSAC(points);
+
+	this->visualizeVector3dWithPlane(normal3d, msg->poses[0].position);
 
 	// convert eigen vector3d to eigen quaterniond
-	//Eigen::Quaterniond q;
-	//q.setFromTwoVectors(Eigen::Vector3d::UnitZ(), normal.normalized());
+	// Eigen::Quaterniond q;
+	// q.setFromTwoVectors(Eigen::Vector3d::UnitZ(), normal.normalized());
 
 	/*
 	// ----------------- visualize the normal to the plane in a predetermined position -----------------
@@ -82,13 +78,12 @@ void MultiArucoPlaneDetection::marker_callback(const ros2_aruco_interfaces::msg:
 	placement.z = p1.z();
 	this->publishQuaternionAsPlane(q, placement);
 	*/
-
-	this->visualizeVector4dWithPlaneAndNormal(plane);
 }
 
 // given a set of 3 points, computes the quaternion of the normal to the plane passing through these points
-Eigen::Quaterniond MultiArucoPlaneDetection::computeNormalOrientation(const Eigen::Vector3d &p1, const Eigen::Vector3d &p2,
-																	  const Eigen::Vector3d &p3) {
+Eigen::Vector3d MultiArucoPlaneDetection::computeNormalFromPlanePoints(const Eigen::Vector3d &p1,
+																	   const Eigen::Vector3d &p2,
+																	   const Eigen::Vector3d &p3) {
 
 	// Compute two vectors lying on the plane
 	Eigen::Vector3d v1 = p2 - p1;
@@ -96,15 +91,12 @@ Eigen::Quaterniond MultiArucoPlaneDetection::computeNormalOrientation(const Eige
 
 	// Compute the normal vector to the plane
 	Eigen::Vector3d normal = v1.cross(v2);
+	normal.normalize();
 
-	// Compute the rotation quaternion from the z-axis to the normal vector
-	Eigen::Quaterniond q;
-	q.setFromTwoVectors(Eigen::Vector3d::UnitZ(), normal);
-	return q;
+	return normal;
 }
 
-// given a set of xyz points, computes all possible planes, then applies ransac and svd to find the best fitting plane
-Eigen::Vector4d MultiArucoPlaneDetection::planeFittingWithRANSAC(const Eigen::MatrixXd &points) {
+Eigen::MatrixXd MultiArucoPlaneDetection::getVectors3dFromPoints(const Eigen::MatrixXd &points) {
 	const int n_points = points.cols();
 	int n_combinations;
 	if (n_points == 7) {
@@ -120,71 +112,92 @@ Eigen::Vector4d MultiArucoPlaneDetection::planeFittingWithRANSAC(const Eigen::Ma
 	}
 
 	// given a set of points (x,y,z) compute the set of planes for every possible combination of 3 different points
-	Eigen::MatrixXd planes(4, n_combinations);
+	// Eigen::MatrixXd planes(4, n_combinations);
+	Eigen::MatrixXd normals3d(3, n_combinations);
+
 	// Compute planes for every possible combination of 3 points
-	
+
 	int count = 0;
 	for (long i = 0; i < n_points - 2; ++i) {
 		for (long j = i + 1; j < n_points - 1; ++j) {
 			for (long k = j + 1; k < n_points; ++k) {
-				Eigen::Vector4d plane = findPlaneEquation(points.col(i), points.col(j), points.col(k));
-				planes.col(count) = plane;
+				// Eigen::Vector4d plane = findPlaneEquation(points.col(i), points.col(j), points.col(k));
+				Eigen::Vector3d normal = computeNormalFromPlanePoints(points.col(i), points.col(j), points.col(k));
+				normals3d.col(count) = normal;
 				count++;
 			}
 		}
 	}
 
-	RCLCPP_INFO(LOGGER, "planes matrix: %ld x %ld", planes.rows(), planes.cols());
+	RCLCPP_INFO(LOGGER, "planes matrix: %ld x %ld", normals3d.rows(), normals3d.cols());
 
+	return normals3d;
+}
+
+// given a set of xyz points, computes all possible planes, then applies ransac and svd to find the best fitting plane
+Eigen::Vector3d MultiArucoPlaneDetection::planeFittingWithRANSAC(const Eigen::MatrixXd &points) {
+
+	Eigen::MatrixXd normals = getVectors3dFromPoints(points);
 
 	// RANSAC algorithm for plane fitting
 	// https://en.wikipedia.org/wiki/Random_sample_consensus
 
-	const int max_iterations = 100;
-	const double threshold = 0.05; // distance threshold in meters, perpendicular to the plane
+	// RANSAC hyperparameters
+	const int max_iterations = 100; // maximum number of iterations for RANSAC
+	const double threshold = 0.05;	// distance threshold in meters, perpendicular to the plane
 
-	// initialize the best model
-	Eigen::Vector4d best_normal;
+	// initialize the worst base model for RANSAC
+	Eigen::Vector3d best_normal;
 	int best_inliers = 0;
 	double best_distance = 1000.0;
-	int num_planes = planes.cols(); // = points.cols()
-	int min_planes = std::ceil(num_planes / 2.0);
+
+	// range of quantity of normal vectors to use for RANSAC
+	const int num_normals = normals.cols(); // = points.cols()
+	const int min_normals = std::ceil(num_normals / 2.0);
+
+	// number of xyz points
+	const int n_points = points.cols();
+
+	const Eigen::Vector3d centroid = getCentroidFromPoints(points);
 
 	// Random number generator beyween min_points and num_points
 	std::random_device rd;
 	std::mt19937 gen(rd());
-	std::uniform_int_distribution<int> distribution(min_planes, num_planes);
+	std::uniform_int_distribution<int> distribution(min_normals, num_normals);
+
+	// create vector of indexes to select a random subset of points
+	std::vector<int> subset_indices(num_normals); // initialize with all the markers
+	for (int k = 0; k < num_normals; ++k) {
+		subset_indices[k] = k;
+	}
 
 	for (int i = 0; i < max_iterations; ++i) {
 		// Randomly select a subset of points, with at least min_points and at most num_points
 		int subset_size = distribution(gen);
-		std::vector<int> subset_indices(num_planes); // initialize with all the markers
-		for (int k = 0; k < num_planes; ++k) {
-			subset_indices[k] = k;
-		}
 		std::shuffle(subset_indices.begin(), subset_indices.end(), gen); // select which markers to use
 
 		// constructs subset of planes
-		Eigen::MatrixXd subset(4, subset_size);
+		Eigen::MatrixXd subset(3, subset_size);
 		for (int i_point = 0; i_point < subset_size; ++i_point) {
 			int index = subset_indices[i_point];
-			subset.col(i_point) = planes.col(index); // = points.col(index)
+			subset.col(i_point) = normals.col(index); // = points.col(index)
 		}
 
 		// Fit a plane to the subset
-		//Eigen::Vector3d normal = computeNormalWithSVD(subset); // for points
-		Eigen::Vector4d plane_normal = computePlaneNormalWithSVD(subset); // for planes
-		//plane_normal = Eigen::Vector4d(plane_normal(0), plane_normal(1), plane_normal(2), plane_normal(3));
+		Eigen::Vector3d normal3d = computeNormalWithSVD(subset); // for points
 
-		RCLCPP_INFO(LOGGER, "plane normal: %f %f %f %f", plane_normal(0), plane_normal(1), plane_normal(2), plane_normal(3));
+		// Eigen::Vector4d plane_normal = computePlaneNormalWithSVD(subset); // for planes
 
 		// Count inliers and compute total distance metrics
 		int inlier_count = 0;
 		double total_distance = 0.0;
 		for (int j = 0; j < n_points; ++j) {
 			// using xyz points as elements of the matrix
-			//double distance = computeDistance(normal, points.col(j)); // for points
-			double distance = computeDistance(plane_normal, points.col(j));
+			// double distance = computeDistance(normal, points.col(j)); // for points
+
+			Eigen::Vector3d point_normalized = points.col(j) - centroid;
+
+			double distance = computeDistance(normal3d, point_normalized);
 			if (distance < threshold) {
 				inlier_count++;
 			}
@@ -194,12 +207,12 @@ Eigen::Vector4d MultiArucoPlaneDetection::planeFittingWithRANSAC(const Eigen::Ma
 		// Update best plane with inlier count metric
 		if (inlier_count > best_inliers) {
 			best_inliers = inlier_count;
-			best_normal = plane_normal;
+			best_normal = normal3d;
 		}
 
 		if (total_distance < best_distance) {
 			best_distance = total_distance;
-			best_normal = plane_normal;
+			best_normal = normal3d;
 		}
 	}
 
@@ -226,7 +239,6 @@ Eigen::Vector3d MultiArucoPlaneDetection::computeNormalWithSVD(const Eigen::Matr
 	return normalVector;
 }
 
-
 // dynamic sized double values matrix = set of points
 // given a set of abcd planes returns the best fitting plane
 Eigen::Vector4d MultiArucoPlaneDetection::computePlaneNormalWithSVD(const Eigen::MatrixXd &points) {
@@ -243,8 +255,8 @@ Eigen::Vector4d MultiArucoPlaneDetection::computePlaneNormalWithSVD(const Eigen:
 	Eigen::MatrixXd leftSingularVectors = svd.matrixU();
 	// Get the last column of the left singular vectors
 	Eigen::Vector4d normalVector = leftSingularVectors.col(leftSingularVectors.cols() - 1);
-	
-	normalVector = normalVector + centroid;
+
+	// normalVector = normalVector + centroid;
 
 	return normalVector;
 }
@@ -269,6 +281,27 @@ double MultiArucoPlaneDetection::computeDistance(const Eigen::Vector4d &plane, c
 	return distance;
 }
 
+double MultiArucoPlaneDetection::computeDistance(const Eigen::Vector3d &normal, const Eigen::Vector3d &point) {
+	// Compute the distance from a point to a plane
+	// Assuming the point is part of a constellation of points where the centroid is the origin
+	// https://mathinsight.org/distance_point_plane
+
+	// Compute the dot product of the point with the vector normal to the plane (a, b, c)
+	double dotProduct = normal.x() * point.x() + normal.y() * point.y() + normal.z() * point.z();
+	double norm = std::sqrt(normal.x() * normal.x() + normal.y() * normal.y() + normal.z() * normal.z());
+
+	// Compute the distance using the formula
+	double distance = std::abs(dotProduct) / norm;
+
+	return distance;
+}
+
+Eigen::Vector3d MultiArucoPlaneDetection::getCentroidFromPoints(const Eigen::MatrixXd &points) {
+	// Compute centroid
+	Eigen::Vector3d centroid = points.rowwise().mean();
+	return centroid;
+}
+
 // given a set of points (vector3d) computes the plane equation ax + by + cz + d = 0
 Eigen::Vector4d MultiArucoPlaneDetection::findPlaneEquation(const Eigen::Vector3d &point1, const Eigen::Vector3d &point2,
 															const Eigen::Vector3d &point3) {
@@ -290,9 +323,13 @@ Eigen::Vector4d MultiArucoPlaneDetection::findPlaneEquation(const Eigen::Vector3
 	return Eigen::Vector4d(a, b, c, d);
 }
 
-void MultiArucoPlaneDetection::visualizeQuaternionAsPlane(const Eigen::Quaterniond quaternion,
-														geometry_msgs::msg::Point placement) {
+void MultiArucoPlaneDetection::visualizeVector3dWithPlane(const Eigen::Vector3d normal,
+														  geometry_msgs::msg::Point placement) {
 	// create a visualization markery array, so to display a plane and the normal vector
+
+	// convert eigen vector3d to eigen quaterniond
+	Eigen::Quaterniond quaternion;
+	quaternion.setFromTwoVectors(Eigen::Vector3d::UnitZ(), normal.normalized());
 
 	visualization_msgs::msg::Marker marker_plane;
 	marker_plane.header.frame_id = camera_frame_name;

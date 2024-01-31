@@ -35,20 +35,29 @@ public:
 	void marker_callback(const ros2_aruco_interfaces::msg::ArucoMarkers::SharedPtr msg);
 
 	// compute plane passing through 3 given points
-	Eigen::Quaterniond computeNormalOrientation(const Eigen::Vector3d &p1, const Eigen::Vector3d &p2, const Eigen::Vector3d &p3);
+	// given a set of 3 points, computes the quaternion of the normal to the plane passing through these points
+	Eigen::Vector3d computeNormalFromPlanePoints(const Eigen::Vector3d &p1,
+												 const Eigen::Vector3d &p2,
+												 const Eigen::Vector3d &p3);
 
-	Eigen::Vector4d planeFittingWithRANSAC(const Eigen::MatrixXd &points);
+	Eigen::MatrixXd getVectors3dFromPoints(const Eigen::MatrixXd &points);
+
+	Eigen::Vector3d planeFittingWithRANSAC(const Eigen::MatrixXd &points);
 
 	// compute best fitting plane passing through all given points using SVD
 	Eigen::Vector3d computeNormalWithSVD(const Eigen::MatrixXd &points);
 
 	Eigen::Vector4d computePlaneNormalWithSVD(const Eigen::MatrixXd &points);
 
+	Eigen::Vector3d getCentroidFromPoints(const Eigen::MatrixXd &points);
+
 	double computeDistance(const Eigen::Vector4d &plane, const Eigen::Vector3d &point);
 
-	void visualizeQuaternionAsPlane(const Eigen::Quaterniond quaternion, geometry_msgs::msg::Point placement);
+	double computeDistance(const Eigen::Vector3d &normal, const Eigen::Vector3d &point);
 
-    void visualizeVector4dWithPlaneAndNormal(Eigen::Vector4d plane);
+	void visualizeVector3dWithPlane(const Eigen::Vector3d normal, geometry_msgs::msg::Point placement);
+
+	void visualizeVector4dWithPlaneAndNormal(Eigen::Vector4d plane);
 
 	Eigen::Vector4d findPlaneEquation(const Eigen::Vector3d &point1, const Eigen::Vector3d &point2,
 									  const Eigen::Vector3d &point3);
