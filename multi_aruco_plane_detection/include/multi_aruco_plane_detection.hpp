@@ -21,8 +21,14 @@ private:
 	// subscription to /aruco_markers topic
 	rclcpp::Subscription<ros2_aruco_interfaces::msg::ArucoMarkers>::SharedPtr aruco_subscription_;
 
-	const std::vector<int> required_markers_ids = {7, 8};
-	const std::vector<int> markers_used = {1, 2, 4, 5, 6, 7, 8};
+	const std::vector<int> required_markers_ids = {7, 8};					   // markers IDs required for plane detection
+	const std::vector<int> markers_ids = {1, 2, 4, 5, 6, 7, 8};				   // markers IDs available
+	const unsigned long expected_markers_max = markers_ids.size();			   // maximum number of markers expected in the scene
+	const unsigned int expected_markers_min = required_markers_ids.size() + 1; // minimum number of required markers in the scene
+
+	// RANSAC hyperparameters
+	const int max_iterations = 25; // maximum number of iterations for RANSAC
+	const double threshold = 0.05; // distance threshold in meters, perpendicular to the plane
 
 	// name of the camera frame
 	std::string camera_frame_name;
@@ -31,36 +37,84 @@ private:
 	rclcpp::Logger LOGGER = rclcpp::get_logger("multi_aruco");
 
 public:
-	// callback function for /aruco_markers topic
+	/**
+	 * @brief constructor of the node
+	 * @param node_options options for the node
+	 */
+	MultiArucoPlaneDetection(const rclcpp::NodeOptions &node_options);
+
+	/**
+	 * @brief callback function for /aruco/markers topic subscription.
+	 * 		  Core thread of the node, it performs the plane detection and publishes the corrected aruco markers.
+	 * @param msg message containing the detected aruco markers array
+	 */
 	void marker_callback(const ros2_aruco_interfaces::msg::ArucoMarkers::SharedPtr msg);
 
-	// compute plane passing through 3 given points
-	// given a set of 3 points, computes the quaternion of the normal to the plane passing through these points
-	Eigen::Vector3d computeNormalFromPlanePoints(const Eigen::Vector3d &p1,
-												 const Eigen::Vector3d &p2,
-												 const Eigen::Vector3d &p3);
+	/**
+	 * @brief construct a matrix of points from the detected aruco markers
+	 * @param msg message containing the detected aruco markers array
+	 * @return matrix of points, each column is a point [x,y,z]
+	 */
+	Eigen::MatrixXd constructOrderedMatrixFromPoints(const ros2_aruco_interfaces::msg::ArucoMarkers::SharedPtr msg);
 
-	Eigen::MatrixXd getVectors3dFromPoints(const Eigen::MatrixXd &points);
-
+	/**
+	 * @brief compute the best fitting plane passing through all given points using RANSAC
+	 * @param points matrix of points, each column is a point [x,y,z]
+	 * @return the best fitting plane normal vector
+	 */
 	Eigen::Vector3d planeFittingWithRANSAC(const Eigen::MatrixXd &points);
 
-	// compute best fitting plane passing through all given points using SVD
+	/**
+	 * @brief compute the best fitting line passing through all given points using linear regression
+	 * @param points matrix of points, each column is a point [x,y,z]
+	 * @return the best fitting line normal vector
+	 */
+	Eigen::Vector3d lineFittingWithRegression(const Eigen::MatrixXd &points, const Eigen::Vector3d &plane_normal);
+
+	/**
+	 * @brief computex best fitting plane passing through all given points using SVD
+	 * @param points matrix of points, each column is a normal vector
+	 * @return the best fitting plane normal vector
+	 */
 	Eigen::Vector3d computeNormalWithSVD(const Eigen::MatrixXd &points);
 
-	Eigen::Vector4d computePlaneNormalWithSVD(const Eigen::MatrixXd &points);
-
-	Eigen::Vector3d getCentroidFromPoints(const Eigen::MatrixXd &points);
-
-	double computeDistance(const Eigen::Vector4d &plane, const Eigen::Vector3d &point);
-
+	/**
+	 * @brief compute the distance of a point [x,y,z] from a plane on its perpendicular direction
+	 * @param normal normal vector of the plane
+	 * @param point point to compute the distance from
+	 * @return distance of the point from the plane
+	 */
 	double computeDistance(const Eigen::Vector3d &normal, const Eigen::Vector3d &point);
 
-	void visualizeVector3dWithPlane(const Eigen::Vector3d normal, geometry_msgs::msg::Point placement);
+	/**
+	 * @brief compute the centroid of a set of points
+	 * @param points matrix of points, each column is a point [x,y,z]
+	 * @return centroid of the points
+	 */
+	Eigen::Vector3d getCentroidFromPoints(const Eigen::MatrixXd &points);
 
-	void visualizeVector4dWithPlaneAndNormal(Eigen::Vector4d plane);
+	/**
+	 * @brief set the yaw of a quaternion to zero, given a normal vector of a plane
+	 * @param normal normal vector of the plane
+	 * @return quaternion with yaw set to zero
+	 */
+	Eigen::Quaterniond setYawZero(const Eigen::Vector3d &normal);
 
-	Eigen::Vector4d findPlaneEquation(const Eigen::Vector3d &point1, const Eigen::Vector3d &point2,
-									  const Eigen::Vector3d &point3);
+	/**
+	 * @brief construct a quaternion from two vectors and a normal vector
+	 * @param vector_x first vector = best fitting line across arucos on the bottom of the plane
+	 * @param vector_y second vector (must be perpendicular to the first one)
+	 * @param normal_z normal vector to the best fitting plane
+	 * @return quaternion with the given vectors as x and y axis and the normal vector as z axis
+	 */
+	Eigen::Quaterniond constructQuaternionFromVectors(const Eigen::Vector3d &vector_x,
+													  const Eigen::Vector3d &vector_y,
+													  const Eigen::Vector3d &normal_z);
 
-	MultiArucoPlaneDetection(const rclcpp::NodeOptions &node_options);
+	/**
+	 * @brief visualize the quaternion orientation with a plane and an arrow in RViz using the /viz_markers topic
+	 * @param quaternion quaternion to visualize as a plane with an arrow in RViz
+	 * @param placement point where the center of the plane should be placed
+	 */
+	void visualizeQuaternionWithPlane(const Eigen::Quaterniond quaternion, geometry_msgs::msg::Point placement);
 };

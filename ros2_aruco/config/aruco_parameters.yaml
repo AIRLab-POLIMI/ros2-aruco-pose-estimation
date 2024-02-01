@@ -7,6 +7,6 @@
         camera_info_topic: /camera/color/camera_info # Input camera info topic with camera intrinsic parameters
         camera_frame: camera_depth_optical_frame # Camera link frame of reference
         # Output topics
-        detected_markers_topic: /aruco_markers # Output topic with detected markers (aruco poses + ids)
-        markers_visualization_topic: /aruco_poses # Output topic with visualization of detected markers as pose array
-        display_image_topic: /aruco_image # Output topic with visualization of detected markers drawn on image
+        detected_markers_topic: /aruco/markers # Output topic with detected markers (aruco poses + ids)
+        markers_visualization_topic: /aruco/poses # Output topic with visualization of detected markers as pose array
+        display_image_topic: /aruco/image # Output topic with visualization of detected markers drawn on image
