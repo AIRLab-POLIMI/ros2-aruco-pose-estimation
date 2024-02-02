@@ -1,5 +1,7 @@
 #include "multi_aruco_plane_detection.hpp"
 
+void displayPointsMatrixAndVector(const Eigen::MatrixXd &points, const Eigen::Vector3d &vector, const std::string &camera_frame_name, rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr markers_publisher_, const Eigen::Vector3d &centroid);
+
 /**
  * @brief constructor of the node
  * @param node_options options for the node
@@ -33,29 +35,15 @@ MultiArucoPlaneDetection::MultiArucoPlaneDetection(const rclcpp::NodeOptions &no
  * @param msg message containing the detected aruco markers array
  */
 void MultiArucoPlaneDetection::marker_callback(const ros2_aruco_interfaces::msg::ArucoMarkers::SharedPtr msg) {
-	// check whether the message contains at least 3 markers
-	const unsigned int num_markers = msg->marker_ids.size();
+	// check if the detected markers are sufficient for plane detection
+	bool valid_markers = areMarkersSufficient(msg);
 
-	// at least 3 markers are needed to compute a valid plane
-	// at most 7 markers are expected with the current setup
-	if (num_markers < expected_markers_min || num_markers > expected_markers_max) {
-		RCLCPP_DEBUG(LOGGER, "Received %d markers: insufficient or invalid quantity", num_markers);
-		return; // not enough markers to compute a plane OR more markers than expected
+	// skip the computation if the markers are not sufficient
+	if (!valid_markers) {
+		return;
+	} else {
+		RCLCPP_DEBUG(LOGGER, "Received %ld markers", msg->marker_ids.size());
 	}
-
-	//  given the set of available markers, check whether the minimum subset of markers is available
-	bool required_markers_available = true;
-	for (unsigned int i = 0; i < required_markers_ids.size(); i++) {
-		if (std::find(msg->marker_ids.begin(), msg->marker_ids.end(), required_markers_ids[i]) == msg->marker_ids.end()) {
-			required_markers_available = false;
-			break;
-		}
-	}
-	if (!required_markers_available) {
-		return; // insufficient markers to compute a plane with enough confidence
-	}
-
-	RCLCPP_DEBUG(LOGGER, "Received %d markers", num_markers);
 
 	// create a matrix of points from the markers, ordered according to the saved markers IDs
 	Eigen::MatrixXd points = constructOrderedMatrixFromPoints(msg);
@@ -68,16 +56,17 @@ void MultiArucoPlaneDetection::marker_callback(const ros2_aruco_interfaces::msg:
 	// get the quaternion from the combination of the 3 vectors
 	Eigen::Quaterniond normal_quat = constructQuaternionFromVectors(vector_x, vector_y, normal3d);
 
-	// straighten the normal vector to point upwards
-	// TODO: yaw angle is derived from the normal vector orientation
-	// Eigen::Quaterniond normal_quat = this->setYawZero(normal3d);
-
 	// visualize the plane with the normal vector in the choses position (first marker registered)
-	this->visualizeQuaternionWithPlane(normal_quat, msg->poses[0].position);
+	if (enable_visualization) {
+		this->visualizeQuaternionWithPlane(normal_quat, getCentroidFromPoints(points));
+
+		// for debugging: visualize the axes and the plane composing the final orientation computed
+		// this->visualizeAxesAndPlane(vector_x, vector_y, normal3d, getCentroidFromPoints(points));
+	}
 
 	// create a corrected aruco marker message and publish it with the corrected orientation
 	ros2_aruco_interfaces::msg::ArucoMarkers corrected_markers(*msg);
-	for (unsigned int i = 0; i < num_markers; i++) {
+	for (unsigned int i = 0; i < msg->marker_ids.size(); i++) {
 		// convert eigen quaterniond to geometry_msgs quaternion
 		geometry_msgs::msg::Quaternion quaternion_msg;
 		quaternion_msg.x = normal_quat.x();
@@ -90,6 +79,51 @@ void MultiArucoPlaneDetection::marker_callback(const ros2_aruco_interfaces::msg:
 	}
 	// publish corrected markers
 	aruco_publisher_->publish(corrected_markers);
+}
+
+/**
+ * @brief check if the detected markers are sufficient for plane detection
+ * @param msg message containing the detected aruco markers array
+ * @return true if the detected markers are sufficient, false otherwise
+ */
+bool MultiArucoPlaneDetection::areMarkersSufficient(const ros2_aruco_interfaces::msg::ArucoMarkers::SharedPtr msg) {
+	// check whether the message contains at least 3 markers
+	const unsigned int num_markers = msg->marker_ids.size();
+
+	// at least 3 markers are needed to compute a valid plane
+	// at most 7 markers are expected with the current setup
+	if (num_markers < expected_markers_min || num_markers > expected_markers_max) {
+		RCLCPP_DEBUG(LOGGER, "Received %d markers: insufficient or invalid quantity", num_markers);
+		return false; // not enough markers to compute a plane OR more markers than expected
+	}
+
+	//  given the set of available markers, check whether the minimum subset of markers is available
+	bool plane_markers_available = true;
+	for (unsigned int i = 0; i < required_markers_ids.size(); i++) {
+		if (std::find(msg->marker_ids.begin(), msg->marker_ids.end(), required_markers_ids[i]) == msg->marker_ids.end()) {
+			plane_markers_available = false;
+			break;
+		}
+	}
+	if (!plane_markers_available) {
+		return false; // insufficient markers to compute a plane with enough confidence
+	}
+
+	// check if at least 2 markers are available to compute the line, among the marker ids not in the required set
+	int line_markers_available = 0;
+	for (unsigned int i = 0; i < markers_ids.size() - 2; i++) {
+		for (unsigned int j = 0; j < num_markers; j++) {
+			if (markers_ids[i] == msg->marker_ids[j]) {
+				line_markers_available += 1;
+				break;
+			}
+		}
+	}
+	if (line_markers_available < 2) {
+		return false; // insufficient markers to compute a line with enough confidence
+	}
+
+	return true; // sufficient markers to compute a plane and a line
 }
 
 /**
@@ -200,15 +234,6 @@ Eigen::Vector3d MultiArucoPlaneDetection::planeFittingWithRANSAC(const Eigen::Ma
 }
 
 /**
- * @brief compute the best fitting line passing through all given points using linear regression
- * @param points matrix of points, each column is a point [x,y,z]
- * @return the best fitting line normal vector
- */
-Eigen::Vector3d MultiArucoPlaneDetection::lineFittingWithRegression(const Eigen::MatrixXd &points,
-																	const Eigen::Vector3d &plane_normal) {
-}
-
-/**
  * @brief computex best fitting plane passing through all given points using SVD
  * @param points matrix of points, each column is a normal vector
  * @return the best fitting plane normal vector
@@ -228,7 +253,77 @@ Eigen::Vector3d MultiArucoPlaneDetection::computeNormalWithSVD(const Eigen::Matr
 	// Get the last column of the left singular vectors
 	Eigen::Vector3d normalVector = leftSingularVectors.col(leftSingularVectors.cols() - 1);
 
+	// set direction of the normal vector (negative with respect to the frame)
+	if (normalVector.z() > 0) {
+		normalVector = -normalVector;
+	}
+
 	return normalVector;
+}
+
+/**
+ * @brief compute the best fitting line passing through all given points using linear regression
+ * @param points matrix of points, each column is a point [x,y,z]
+ * @return the best fitting line normal vector
+ */
+Eigen::Vector3d MultiArucoPlaneDetection::lineFittingWithRegression(const Eigen::MatrixXd &points,
+																	const Eigen::Vector3d &plane_normal) {
+
+	// remove the last two columns of the matrix: it will produce the matrix of the points on the bottom
+	// 		of the aruco button setup, excluding the	two points on top of the aruco button setup
+	const int num_valid_markers = points.cols() - 2;
+
+	// Compute the centroid of the points
+	Eigen::Vector3d centroid(0.0, 0.0, 0.0);
+	for (int i = 0; i < num_valid_markers; i++) {
+		centroid += points.col(i);
+	}
+	centroid /= num_valid_markers;
+
+	// normalize the plane normal
+	double plane_norm = plane_normal.norm();
+	double plane_norm_squared = plane_norm * plane_norm;
+	Eigen::Vector3d normal = plane_normal / plane_norm;
+
+	// then project the points on the plane normal and get the matrix of projected points coordinates
+	Eigen::MatrixXd projected_points(3, num_valid_markers);
+	for (int i = 0; i < num_valid_markers; i++) {
+		// remove the centroid from the points
+		Eigen::Vector3d centered_point = points.col(i) - centroid;
+		// orthogonal projection of the point on the plane
+		projected_points.col(i) = centered_point - centered_point.dot(normal) * normal / (plane_norm_squared);
+	}
+
+	// compute centroid of projected points
+	centroid = Eigen::Vector3d::Zero();
+	for (int i = 0; i < num_valid_markers; i++) {
+		centroid += projected_points.col(i);
+	}
+	centroid /= num_valid_markers;
+
+	// Compute the covariance matrix of the projected points
+	Eigen::Matrix3d covariance = Eigen::Matrix3d::Zero();
+	for (int i = 0; i < num_valid_markers; i++) {
+		Eigen::Vector3d diff = projected_points.col(i) - centroid;
+		covariance += diff * diff.transpose();
+	}
+	covariance /= (num_valid_markers - 1);
+
+	// Compute the eigenvectors of the covariance matrix
+	Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> solver(covariance);
+	// Take the last eigenvector as the direction of greatest variance = the best fitting line
+	Eigen::Vector3d vector_x = solver.eigenvectors().col(2);
+
+	// use the last 2 marker points coordinates to compute the direction of the vector x
+	Eigen::Vector3d point_a = points.col(num_valid_markers);
+	Eigen::Vector3d point_b = points.col(num_valid_markers + 1);
+
+	// compute the direction of the vector x
+	if (point_a.x() > point_b.x()) {
+		vector_x = -vector_x;
+	}
+
+	return vector_x;
 }
 
 /**
@@ -264,27 +359,6 @@ Eigen::Vector3d MultiArucoPlaneDetection::getCentroidFromPoints(const Eigen::Mat
 }
 
 /**
- * @brief set the yaw of a quaternion to zero, given a normal vector of a plane
- * @param normal normal vector of the plane
- * @return quaternion with yaw set to zero
- */
-Eigen::Quaterniond MultiArucoPlaneDetection::setYawZero(const Eigen::Vector3d &normal) {
-
-	// convert eigen vector3d to eigen quaterniond
-	Eigen::Quaterniond quaternion;
-	quaternion.setFromTwoVectors(Eigen::Vector3d::UnitZ(), normal.normalized());
-
-	// given the quaternion change the yaw angle and fix it to zero
-	// Convert the quaternion to Euler angles (roll, pitch, yaw)
-	Eigen::Vector3d euler = quaternion.toRotationMatrix().eulerAngles(0, 1, 2);
-	// Set the yaw angle to zero
-	euler[2] = 0.0;
-	// Convert the modified Euler angles back to a quaternion
-	Eigen::Quaterniond modifiedQuaternion(Eigen::AngleAxisd(euler[0], Eigen::Vector3d::UnitX()) * Eigen::AngleAxisd(euler[1], Eigen::Vector3d::UnitY()) * Eigen::AngleAxisd(euler[2], Eigen::Vector3d::UnitZ()));
-	return modifiedQuaternion;
-}
-
-/**
  * @brief construct a quaternion from two vectors and a normal vector
  * @param vector_x first vector = best fitting line across arucos on the bottom of the plane
  * @param vector_y second vector (must be perpendicular to the first one)
@@ -294,7 +368,13 @@ Eigen::Quaterniond MultiArucoPlaneDetection::setYawZero(const Eigen::Vector3d &n
 Eigen::Quaterniond MultiArucoPlaneDetection::constructQuaternionFromVectors(const Eigen::Vector3d &vector_x,
 																			const Eigen::Vector3d &vector_y,
 																			const Eigen::Vector3d &normal_z) {
-																				
+	// given the 3 vectors, construct a quaternion with the given vectors as x and y axis and the normal vector as z axis
+	Eigen::Matrix3d rotation_matrix;
+	rotation_matrix.col(0) = vector_x.normalized();
+	rotation_matrix.col(1) = vector_y.normalized();
+	rotation_matrix.col(2) = normal_z.normalized();
+	Eigen::Quaterniond quaternion(rotation_matrix);
+	return quaternion;
 }
 
 /**
@@ -303,7 +383,7 @@ Eigen::Quaterniond MultiArucoPlaneDetection::constructQuaternionFromVectors(cons
  * @param placement point where the center of the plane should be placed
  */
 void MultiArucoPlaneDetection::visualizeQuaternionWithPlane(const Eigen::Quaterniond quaternion,
-															geometry_msgs::msg::Point placement) {
+															const Eigen::Vector3d placement) {
 	// create a visualization markery array, so to display a plane and the normal vector
 	visualization_msgs::msg::Marker marker_plane;
 	marker_plane.header.frame_id = camera_frame_name;
@@ -311,7 +391,9 @@ void MultiArucoPlaneDetection::visualizeQuaternionWithPlane(const Eigen::Quatern
 	marker_plane.id = 0;
 	marker_plane.type = visualization_msgs::msg::Marker::CUBE;
 	marker_plane.action = visualization_msgs::msg::Marker::ADD;
-	marker_plane.pose.position = placement;
+	marker_plane.pose.position.x = placement.x();
+	marker_plane.pose.position.y = placement.y();
+	marker_plane.pose.position.z = placement.z();
 	marker_plane.pose.orientation.x = quaternion.x();
 	marker_plane.pose.orientation.y = quaternion.y();
 	marker_plane.pose.orientation.z = quaternion.z();
@@ -320,9 +402,9 @@ void MultiArucoPlaneDetection::visualizeQuaternionWithPlane(const Eigen::Quatern
 	marker_plane.scale.y = 0.5;
 	marker_plane.scale.z = 0.01;
 	// orange color rgb = (255, 165, 0)
-	marker_plane.color.r = 255.0 / 255.0;
-	marker_plane.color.g = 165.0 / 255.0;
-	marker_plane.color.b = 0.0;
+	marker_plane.color.r = 56.0 / 255.0;
+	marker_plane.color.g = 125.0 / 255.0;
+	marker_plane.color.b = 187.0 / 255.0;
 	marker_plane.color.a = 1.0;
 
 	visualization_msgs::msg::Marker marker_arrow;
@@ -331,7 +413,9 @@ void MultiArucoPlaneDetection::visualizeQuaternionWithPlane(const Eigen::Quatern
 	marker_arrow.id = 1;
 	marker_arrow.type = visualization_msgs::msg::Marker::ARROW;
 	marker_arrow.action = visualization_msgs::msg::Marker::ADD;
-	marker_arrow.pose.position = placement;
+	marker_arrow.pose.position.x = placement.x();
+	marker_arrow.pose.position.y = placement.y();
+	marker_arrow.pose.position.z = placement.z();
 	marker_arrow.pose.orientation.x = quaternion.x();
 	marker_arrow.pose.orientation.y = quaternion.y();
 	marker_arrow.pose.orientation.z = quaternion.z();
@@ -350,6 +434,132 @@ void MultiArucoPlaneDetection::visualizeQuaternionWithPlane(const Eigen::Quatern
 	marker_array_msg.markers.resize(2);
 	marker_array_msg.markers[0] = marker_plane;
 	marker_array_msg.markers[1] = marker_arrow;
+
+	// publish the message
+	markers_publisher_->publish(marker_array_msg);
+}
+
+/**
+ * @brief visualize the XYZ axes and a plane in RViz using the /viz_markers topic
+ * @param vx x axis vector
+ * @param vy y axis vector
+ * @param vz z axis vector = normal vector to the plane
+ * @param placement point where the center of the plane should be placed
+ */
+void MultiArucoPlaneDetection::visualizeAxesAndPlane(const Eigen::Vector3d vx, const Eigen::Vector3d vy,
+													 const Eigen::Vector3d vz, const Eigen::Vector3d placement) {
+
+	// convert each eigen vector3d to eigen quaterniond
+	Eigen::Quaterniond quaternion_z;
+	quaternion_z.setFromTwoVectors(Eigen::Vector3d::UnitZ(), vz.normalized());
+
+	// create a visualization markery array, so to display a plane and the normal vector
+	visualization_msgs::msg::Marker marker_plane;
+	marker_plane.header.frame_id = camera_frame_name;
+	marker_plane.header.stamp = rclcpp::Clock().now();
+	marker_plane.id = 0;
+	marker_plane.type = visualization_msgs::msg::Marker::CUBE;
+	marker_plane.action = visualization_msgs::msg::Marker::ADD;
+	marker_plane.pose.position.x = placement.x();
+	marker_plane.pose.position.y = placement.y();
+	marker_plane.pose.position.z = placement.z();
+	marker_plane.pose.orientation.x = quaternion_z.x();
+	marker_plane.pose.orientation.y = quaternion_z.y();
+	marker_plane.pose.orientation.z = quaternion_z.z();
+	marker_plane.pose.orientation.w = quaternion_z.w();
+	marker_plane.scale.x = 0.5;
+	marker_plane.scale.y = 0.5;
+	marker_plane.scale.z = 0.01;
+	// orange color rgb = (255, 165, 0)
+	marker_plane.color.r = 255.0 / 255.0;
+	marker_plane.color.g = 165.0 / 255.0;
+	marker_plane.color.b = 0.0;
+	marker_plane.color.a = 1.0;
+
+	// rotate the y axis arrow such that it represents the green y axis
+	// quaternion_x = quaternion_x * Eigen::AngleAxisd(M_PI_2, Eigen::Vector3d::UnitZ());
+
+	Eigen::Quaterniond quaternion_x;
+	quaternion_x.setFromTwoVectors(Eigen::Vector3d::UnitX(), vx.normalized());
+
+	visualization_msgs::msg::Marker marker_arrow_x;
+	marker_arrow_x.header.frame_id = camera_frame_name;
+	marker_arrow_x.header.stamp = rclcpp::Clock().now();
+	marker_arrow_x.id = 1;
+	marker_arrow_x.type = visualization_msgs::msg::Marker::ARROW;
+	marker_arrow_x.action = visualization_msgs::msg::Marker::ADD;
+	marker_arrow_x.pose.position.x = placement.x();
+	marker_arrow_x.pose.position.y = placement.y();
+	marker_arrow_x.pose.position.z = placement.z();
+	marker_arrow_x.pose.orientation.x = quaternion_x.x();
+	marker_arrow_x.pose.orientation.y = quaternion_x.y();
+	marker_arrow_x.pose.orientation.z = quaternion_x.z();
+	marker_arrow_x.pose.orientation.w = quaternion_x.w();
+	marker_arrow_x.scale.x = 0.6;
+	marker_arrow_x.scale.y = 0.01;
+	marker_arrow_x.scale.z = 0.01;
+	// color red
+	marker_arrow_x.color.r = 255.0 / 255.0;
+	marker_arrow_x.color.g = 0.0 / 255.0;
+	marker_arrow_x.color.b = 0.0 / 255.0;
+	marker_arrow_x.color.a = 1.0;
+
+	Eigen::Quaterniond quaternion_y;
+	quaternion_y.setFromTwoVectors(Eigen::Vector3d::UnitX(), vy.normalized());
+
+	visualization_msgs::msg::Marker marker_arrow_y;
+	marker_arrow_y.header.frame_id = camera_frame_name;
+	marker_arrow_y.header.stamp = rclcpp::Clock().now();
+	marker_arrow_y.id = 2;
+	marker_arrow_y.type = visualization_msgs::msg::Marker::ARROW;
+	marker_arrow_y.action = visualization_msgs::msg::Marker::ADD;
+	marker_arrow_y.pose.position.x = placement.x();
+	marker_arrow_y.pose.position.y = placement.y();
+	marker_arrow_y.pose.position.z = placement.z();
+	marker_arrow_y.pose.orientation.x = quaternion_y.x();
+	marker_arrow_y.pose.orientation.y = quaternion_y.y();
+	marker_arrow_y.pose.orientation.z = quaternion_y.z();
+	marker_arrow_y.pose.orientation.w = quaternion_y.w();
+	marker_arrow_y.scale.x = 0.6;
+	marker_arrow_y.scale.y = 0.01;
+	marker_arrow_y.scale.z = 0.01;
+	// color green
+	marker_arrow_y.color.r = 0.0 / 255.0;
+	marker_arrow_y.color.g = 255.0 / 255.0;
+	marker_arrow_y.color.b = 0.0 / 255.0;
+	marker_arrow_y.color.a = 1.0;
+
+	quaternion_z.setFromTwoVectors(Eigen::Vector3d::UnitX(), vz.normalized());
+
+	visualization_msgs::msg::Marker marker_arrow_z;
+	marker_arrow_z.header.frame_id = camera_frame_name;
+	marker_arrow_z.header.stamp = rclcpp::Clock().now();
+	marker_arrow_z.id = 3;
+	marker_arrow_z.type = visualization_msgs::msg::Marker::ARROW;
+	marker_arrow_z.action = visualization_msgs::msg::Marker::ADD;
+	marker_arrow_z.pose.position.x = placement.x();
+	marker_arrow_z.pose.position.y = placement.y();
+	marker_arrow_z.pose.position.z = placement.z();
+	marker_arrow_z.pose.orientation.x = quaternion_z.x();
+	marker_arrow_z.pose.orientation.y = quaternion_z.y();
+	marker_arrow_z.pose.orientation.z = quaternion_z.z();
+	marker_arrow_z.pose.orientation.w = quaternion_z.w();
+	marker_arrow_z.scale.x = 0.6;
+	marker_arrow_z.scale.y = 0.01;
+	marker_arrow_z.scale.z = 0.01;
+	// color blue
+	marker_arrow_z.color.r = 0.0;
+	marker_arrow_z.color.g = 0.0;
+	marker_arrow_z.color.b = 255.0 / 255.0;
+	marker_arrow_z.color.a = 1.0;
+
+	// create a marker array message
+	visualization_msgs::msg::MarkerArray marker_array_msg;
+	marker_array_msg.markers.resize(4);
+	marker_array_msg.markers[0] = marker_plane;
+	marker_array_msg.markers[1] = marker_arrow_x;
+	marker_array_msg.markers[2] = marker_arrow_y;
+	marker_array_msg.markers[3] = marker_arrow_z;
 
 	// publish the message
 	markers_publisher_->publish(marker_array_msg);

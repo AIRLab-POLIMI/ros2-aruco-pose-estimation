@@ -24,7 +24,7 @@ private:
 	const std::vector<int> required_markers_ids = {7, 8};					   // markers IDs required for plane detection
 	const std::vector<int> markers_ids = {1, 2, 4, 5, 6, 7, 8};				   // markers IDs available
 	const unsigned long expected_markers_max = markers_ids.size();			   // maximum number of markers expected in the scene
-	const unsigned int expected_markers_min = required_markers_ids.size() + 1; // minimum number of required markers in the scene
+	const unsigned int expected_markers_min = required_markers_ids.size() + 2; // minimum number of required markers in the scene
 
 	// RANSAC hyperparameters
 	const int max_iterations = 25; // maximum number of iterations for RANSAC
@@ -35,6 +35,8 @@ private:
 
 	// logger
 	rclcpp::Logger LOGGER = rclcpp::get_logger("multi_aruco");
+
+	const bool enable_visualization = false; // enable visualization of the computed plane in RViz
 
 public:
 	/**
@@ -49,6 +51,13 @@ public:
 	 * @param msg message containing the detected aruco markers array
 	 */
 	void marker_callback(const ros2_aruco_interfaces::msg::ArucoMarkers::SharedPtr msg);
+
+	/**
+	 * @brief check if the detected markers are sufficient for plane detection
+	 * @param msg message containing the detected aruco markers array
+	 * @return true if the detected markers are sufficient, false otherwise
+	 */
+	bool areMarkersSufficient(const ros2_aruco_interfaces::msg::ArucoMarkers::SharedPtr msg);
 
 	/**
 	 * @brief construct a matrix of points from the detected aruco markers
@@ -116,5 +125,15 @@ public:
 	 * @param quaternion quaternion to visualize as a plane with an arrow in RViz
 	 * @param placement point where the center of the plane should be placed
 	 */
-	void visualizeQuaternionWithPlane(const Eigen::Quaterniond quaternion, geometry_msgs::msg::Point placement);
+	void visualizeQuaternionWithPlane(const Eigen::Quaterniond quaternion, const Eigen::Vector3d placement);
+
+	/**
+	 * @brief visualize the XYZ axes and a plane in RViz using the /viz_markers topic
+	 * @param vx x axis vector
+	 * @param vy y axis vector
+	 * @param vz z axis vector = normal vector to the plane
+	 * @param placement point where the center of the plane should be placed
+	 */
+	void visualizeAxesAndPlane(const Eigen::Vector3d vx, const Eigen::Vector3d vy, const Eigen::Vector3d vz,
+							   const Eigen::Vector3d placement);
 };
