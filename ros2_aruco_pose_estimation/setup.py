@@ -2,7 +2,7 @@ from setuptools import setup
 import os
 from glob import glob
 
-package_name = 'ros2_aruco'
+package_name = 'ros2_aruco_pose_estimation'
 
 setup(
     name=package_name,
@@ -24,8 +24,8 @@ setup(
     #tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'aruco_node = ros2_aruco.aruco_node:main',
-            'aruco_generate_marker = ros2_aruco.aruco_generate_marker:main'
+            'aruco_node = ros2_aruco_pose_estimation.aruco_node:main',
+            'aruco_generate_marker = ros2_aruco_pose_estimation.aruco_generate_marker:main'
         ],
     },
 )

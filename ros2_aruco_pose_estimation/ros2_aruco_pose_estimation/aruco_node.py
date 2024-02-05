@@ -45,8 +45,8 @@ import numpy as np
 import cv2
 
 # Local imports for custom defined functions
-from ros2_aruco.utils import ARUCO_DICT, aruco_display
-from ros2_aruco.pose_estimation import pose_estimation
+from ros2_aruco_pose_estimation.utils import ARUCO_DICT, aruco_display
+from ros2_aruco_pose_estimation.pose_estimation import pose_estimation
 
 # ROS2 message imports
 from sensor_msgs.msg import CameraInfo

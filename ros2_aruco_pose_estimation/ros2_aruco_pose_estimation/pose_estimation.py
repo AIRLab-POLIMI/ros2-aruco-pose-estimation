@@ -6,12 +6,11 @@
 # Python imports
 import numpy as np
 import cv2
-from ros2_aruco.utils import my_estimatePoseSingleMarkers, aruco_display
+from ros2_aruco_pose_estimation.utils import my_estimatePoseSingleMarkers, aruco_display
 import tf_transformations
 
 # ROS2 message imports
-from geometry_msgs.msg import PoseArray, Pose
-from ros2_aruco_interfaces.msg import ArucoMarkers
+from geometry_msgs.msg import Pose
 from rclpy.impl import rcutils_logger
 
 
