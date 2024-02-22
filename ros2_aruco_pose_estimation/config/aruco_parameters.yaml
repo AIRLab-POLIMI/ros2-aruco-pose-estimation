@@ -1,11 +1,11 @@
 /aruco_node:
     ros__parameters:
         # Aruco detection parameters
-        marker_size: 0.03 # Size of the markers in meters
-        aruco_dictionary_id: DICT_4X4_250 # Aruco dictionary type
+        marker_size: 0.2 # Size of the markers in meters
+        aruco_dictionary_id: DICT_7X7_50 # Aruco dictionary type
         image_topic: /camera/color/image_raw # Input image topic
         camera_info_topic: /camera/color/camera_info # Input camera info topic with camera intrinsic parameters
-        camera_frame: camera_depth_optical_frame # Camera link frame of reference
+        camera_frame: camera_color_optical_frame # Camera link frame of reference
         # Output topics
         detected_markers_topic: /aruco/markers # Output topic with detected markers (aruco poses + ids)
         markers_visualization_topic: /aruco/poses # Output topic with visualization of detected markers as pose array
