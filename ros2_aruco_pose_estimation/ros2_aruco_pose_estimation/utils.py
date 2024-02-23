@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import cv2
 from rclpy.impl import rcutils_logger
 

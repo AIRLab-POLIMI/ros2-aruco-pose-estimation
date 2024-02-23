@@ -2,19 +2,27 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
 	<name>ros2_aruco_pose_estimation</name>
-	<version>0.1.0</version>
+	<version>2.0.0</version>
 	<description>Aruco Marker Tracking and Pose Estimation wrapper for ROS2</description>
 	<maintainer email="simone.giampa@mail.polimi.it">Simone Giampà</maintainer>
 	<license>AIRLAB</license>
 
+	<buildtool_depend>ament_cmake</buildtool_depend>
+	<buildtool_depend>ament_cmake_python</buildtool_depend>
+
+	<depend>rclpy</depend>
 	<depend>geometry_msgs</depend>
 	<depend>std_msgs</depend>
 	<depend>sensor_msgs</depend>
+	<depend>open3d</depend>
+	<depend>opencv</depend>
+	<depend>cv_bridge</depend>
+	<depend>tf2_transformations</depend>
 
 	<test_depend>ament_lint_auto</test_depend>
 	<test_depend>ament_lint_common</test_depend>
 
 	<export>
-		<build_type>ament_python</build_type>
+		<build_type>ament_cmake</build_type>
 	</export>
 </package>
