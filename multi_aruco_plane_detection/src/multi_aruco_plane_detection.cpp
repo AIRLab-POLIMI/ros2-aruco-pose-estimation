@@ -1,24 +1,23 @@
 #include "multi_aruco_plane_detection.hpp"
 
-void displayPointsMatrixAndVector(const Eigen::MatrixXd &points, const Eigen::Vector3d &vector, const std::string &camera_frame_name, rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr markers_publisher_, const Eigen::Vector3d &centroid);
-
 /**
  * @brief constructor of the node
  * @param node_options options for the node
  */
-MultiArucoPlaneDetection::MultiArucoPlaneDetection(const rclcpp::NodeOptions &node_options) : Node("multi_aruco_plane_detection", node_options) {
+MultiArucoPlaneDetection::MultiArucoPlaneDetection(const rclcpp::NodeOptions &node_options)
+	: Node("multi_aruco_plane_detection", node_options) {
 
 	// create a publisher for the corrected aruco markers
 	aruco_publisher_ = this->create_publisher<ros2_aruco_interfaces::msg::ArucoMarkers>(
-		"/aruco/markers/corrected", 10);
+		this->corrected_aruco_markers_topic, 10);
 
 	// create a publisher for the visualization of the plane
 	markers_publisher_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(
-		"/viz_markers", 10);
+		this->viz_markers_topic, 10);
 
 	// create a subscription to the aruco markers topic for their estimated pose and orientation
 	aruco_subscription_ = this->create_subscription<ros2_aruco_interfaces::msg::ArucoMarkers>(
-		"/aruco/markers", 10, std::bind(&MultiArucoPlaneDetection::marker_callback, this, std::placeholders::_1));
+		this->aruco_markers_topic, 10, std::bind(&MultiArucoPlaneDetection::marker_callback, this, std::placeholders::_1));
 
 	// get the name of the camera frame from the launch parameter
 	camera_frame_name = this->get_parameter("camera_frame").as_string();

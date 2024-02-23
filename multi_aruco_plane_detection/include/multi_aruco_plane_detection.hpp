@@ -33,6 +33,10 @@ private:
 	// name of the camera frame
 	std::string camera_frame_name;
 
+	const std::string viz_markers_topic = "/viz_markers"; // topic for visualization of the computed plane in RViz
+	const std::string aruco_markers_topic = "/aruco/markers/small"; // topic for the detected aruco markers
+	const std::string corrected_aruco_markers_topic = "/aruco/markers/corrected"; // topic for the corrected aruco markers
+
 	// logger
 	rclcpp::Logger LOGGER = rclcpp::get_logger("multi_aruco");
 

@@ -7,9 +7,6 @@
 import numpy as np
 import cv2
 import tf_transformations
-from open3d import geometry
-from open3d import camera
-from open3d import utility
 
 # ROS2 imports
 from rclpy.impl import rcutils_logger
@@ -79,23 +76,30 @@ def pose_estimation(rgb_frame: np.array, depth_frame: np.array, aruco_detector: 
                                                 distCoeffs=distortion_coefficients, rvec=rvec, tvec=tvec,
                                                 length=0.05, thickness=3)
 
-            centroid = depth_to_pointcloud_centroid(depth_image=depth_frame,
-                                                    intrinsic_matrix=matrix_coefficients,
-                                                    corners=corners[i])
-            
-            #print("depthcloud centroid = ", centroid)
-            #print(f"tvec = {tvec[0][0]} {tvec[0][1]} {tvec[0][2]}")
+            if (depth_frame is not None):
+                # get the centroid of the pointcloud
+                centroid = depth_to_pointcloud_centroid(depth_image=depth_frame,
+                                                        intrinsic_matrix=matrix_coefficients,
+                                                        corners=corners[i])
+
+                # log comparison between depthcloud centroid and tvec estimated positions
+                logger.info(f"depthcloud centroid = {centroid}")
+                logger.info(f"tvec = {tvec[0][0]} {tvec[0][1]} {tvec[0][2]}")
 
             # compute pose from the rvec and tvec arrays
-            # when using cv2.aruco.estimatePoseSingleMarkers
-            pose = Pose()
-            pose.position.x = float(tvec[0][0])
-            pose.position.y = float(tvec[0][1])
-            pose.position.z = float(tvec[0][2])
-            #pose.position.x = float(centroid[0])
-            #pose.position.y = float(centroid[1])
-            #pose.position.z = float(centroid[2])
-
+            if (depth_frame is not None):
+                # use computed centroid from depthcloud as estimated pose
+                pose = Pose()
+                pose.position.x = float(centroid[0])
+                pose.position.y = float(centroid[1])
+                pose.position.z = float(centroid[2])
+            else:
+                # use tvec from aruco estimator as estimated pose
+                pose = Pose()
+                pose.position.x = float(tvec[0][0])
+                pose.position.y = float(tvec[0][1])
+                pose.position.z = float(tvec[0][2])
+        
             rot_matrix = np.eye(4)
             rot_matrix[0:3, 0:3] = cv2.Rodrigues(np.array(rvec[0]))[0]
             quat = tf_transformations.quaternion_from_matrix(rot_matrix)
@@ -207,15 +211,15 @@ def depth_to_pointcloud_centroid(depth_image: np.array, intrinsic_matrix: np.arr
     # y = (v - cy) * z / fy
 
     # create pointcloud
-    pointcloud = geometry.PointCloud()
+    pointcloud = []
     for x, y, d in points:
         z = d / 1000.0
         x = (x - intrinsic_matrix[0, 2]) * z / intrinsic_matrix[0, 0]
         y = (y - intrinsic_matrix[1, 2]) * z / intrinsic_matrix[1, 1]
-        pointcloud.points.append([x, y, z])
+        pointcloud.append([x, y, z])
 
     # Calculate centroid from pointcloud
-    centroid = np.mean(pointcloud.points, axis=0)
+    centroid = np.mean(np.array(pointcloud, dtype=np.uint16), axis=0)
 
     return centroid
 

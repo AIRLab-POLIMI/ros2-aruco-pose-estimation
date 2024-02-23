@@ -28,7 +28,7 @@ Parameters:
     camera_frame - camera optical frame to use (default "camera_depth_optical_frame")
     detected_markers_topic - topic to publish detected markers (default /aruco_markers)
     markers_visualization_topic - topic to publish markers visualization (default /aruco_poses)
-    display_image_topic - topic to publish annotated image (default /aruco_image)
+    output_image_topic - topic to publish annotated image (default /aruco_image)
 
 Author: Simone Giampà
 Version: 2024-01-29
@@ -85,34 +85,35 @@ class ArucoNode(rclpy.node.Node):
             CameraInfo, self.info_topic, self.info_callback, qos_profile_sensor_data
         )
 
-        # image topic for the camera images
-        """
-        self.image_sub = self.create_subscription(
-            Image, self.image_topic, self.image_callback, qos_profile_sensor_data
-        )
+        # select the type of input to use for the pose estimation
+        if (bool(self.use_depth_input)):
+            # use both rgb and depth image topics for the pose estimation
 
-        # depth image topic for the depth camera images
-        self.depth_image_sub = self.create_subscription(
-            Image, self.depth_image_topic, self.depth_image_callback, qos_profile_sensor_data
-        )
-        """
-
-        self.image_sub = message_filters.Subscriber(self, Image, self.image_topic,
+            # create a message filter to synchronize the image and depth image topics
+            self.image_sub = message_filters.Subscriber(self, Image, self.image_topic,
                                                     qos_profile=qos_profile_sensor_data)
-        self.depth_image_sub = message_filters.Subscriber(self, Image, self.depth_image_topic,
-                                                          qos_profile=qos_profile_sensor_data)
+            self.depth_image_sub = message_filters.Subscriber(self, Image, self.depth_image_topic,
+                                                            qos_profile=qos_profile_sensor_data)
 
-        # create synchronizer between the 2 topics using message filters and approximate time policy
-        # slop is the maximum time difference between messages that are considered synchronized
-        self.synchronizer = message_filters.ApproximateTimeSynchronizer(
-            [self.image_sub, self.depth_image_sub], queue_size=10, slop=0.05
-        )
-        self.synchronizer.registerCallback(self.rgb_depth_sync_callback)
+            # create synchronizer between the 2 topics using message filters and approximate time policy
+            # slop is the maximum time difference between messages that are considered synchronized
+            self.synchronizer = message_filters.ApproximateTimeSynchronizer(
+                [self.image_sub, self.depth_image_sub], queue_size=10, slop=0.05
+            )
+            self.synchronizer.registerCallback(self.rgb_depth_sync_callback)
+        else:
+            # rely only on the rgb image topic for the pose estimation
+
+            # create a subscription to the image topic
+            self.image_sub = self.create_subscription(
+                Image, self.image_topic, self.image_callback, qos_profile_sensor_data
+            )
+        
 
         # Set up publishers
         self.poses_pub = self.create_publisher(PoseArray, self.markers_visualization_topic, 10)
         self.markers_pub = self.create_publisher(ArucoMarkers, self.detected_markers_topic, 10)
-        self.image_pub = self.create_publisher(Image, self.display_image_topic, 10)
+        self.image_pub = self.create_publisher(Image, self.output_image_topic, 10)
 
         # Set up fields for camera parameters
         self.info_msg = None
@@ -148,6 +149,39 @@ class ArucoNode(rclpy.node.Node):
         if self.info_msg is None:
             self.get_logger().warn("No camera info has been received!")
             return
+        
+        # convert the image messages to cv2 format
+        cv_image = self.bridge.imgmsg_to_cv2(img_msg, desired_encoding="rgb8")
+
+        # create the ArucoMarkers and PoseArray messages
+        markers = ArucoMarkers()
+        pose_array = PoseArray()
+
+        # Set the frame id and timestamp for the markers and pose array
+        if self.camera_frame == "":
+            markers.header.frame_id = self.info_msg.header.frame_id
+            pose_array.header.frame_id = self.info_msg.header.frame_id
+        else:
+            markers.header.frame_id = self.camera_frame
+            pose_array.header.frame_id = self.camera_frame
+
+        markers.header.stamp = img_msg.header.stamp
+        pose_array.header.stamp = img_msg.header.stamp
+
+        # call the pose estimation function
+        frame, pose_array, markers = pose_estimation(rgb_frame=cv_image, depth_frame=None,
+                                                     aruco_detector=self.aruco_detector,
+                                                     marker_size=self.marker_size, matrix_coefficients=self.intrinsic_mat,
+                                                     distortion_coefficients=self.distortion, pose_array=pose_array, markers=markers)
+
+        # if some markers are detected
+        if len(markers.marker_ids) > 0:
+            # Publish the results with the poses and markes positions
+            self.poses_pub.publish(pose_array)
+            self.markers_pub.publish(markers)
+
+        # publish the image frame with computed markers positions over the image
+        self.image_pub.publish(self.bridge.cv2_to_imgmsg(frame, "rgb8"))
         
 
     def depth_image_callback(self, depth_msg: Image):
@@ -212,6 +246,15 @@ class ArucoNode(rclpy.node.Node):
         )
 
         self.declare_parameter(
+            name="use_depth_input",
+            value=True,
+            descriptor=ParameterDescriptor(
+                type=ParameterType.PARAMETER_BOOL,
+                description="Use depth camera input for pose estimation instead of RGB image",
+            ),
+        )
+
+        self.declare_parameter(
             name="image_topic",
             value="/camera/image_raw",
             descriptor=ParameterDescriptor(
@@ -266,7 +309,7 @@ class ArucoNode(rclpy.node.Node):
         )
 
         self.declare_parameter(
-            name="display_image_topic",
+            name="output_image_topic",
             value="/aruco_image",
             descriptor=ParameterDescriptor(
                 type=ParameterType.PARAMETER_STRING,
@@ -284,6 +327,11 @@ class ArucoNode(rclpy.node.Node):
             self.get_parameter("aruco_dictionary_id").get_parameter_value().string_value
         )
         self.get_logger().info(f"Marker type: {self.dictionary_id_name}")
+
+        self.use_depth_input = (
+            self.get_parameter("use_depth_input").get_parameter_value().bool_value
+        )
+        self.get_logger().info(f"Use depth input: {self.use_depth_input}")
 
         self.image_topic = (
             self.get_parameter("image_topic").get_parameter_value().string_value
@@ -314,8 +362,8 @@ class ArucoNode(rclpy.node.Node):
             self.get_parameter("markers_visualization_topic").get_parameter_value().string_value
         )
 
-        self.display_image_topic = (
-            self.get_parameter("display_image_topic").get_parameter_value().string_value
+        self.output_image_topic = (
+            self.get_parameter("output_image_topic").get_parameter_value().string_value
         )
 
 

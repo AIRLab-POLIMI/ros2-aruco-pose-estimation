@@ -6,6 +6,7 @@ from launch import LaunchDescription
 from launch_ros.actions import Node
 from launch.actions import DeclareLaunchArgument
 from launch_ros.substitutions import FindPackageShare
+from launch.conditions import IfCondition, UnlessCondition
 
 import os
 from ament_index_python.packages import get_package_share_directory
@@ -44,6 +45,13 @@ def generate_launch_description():
         description='Name of the image RGB topic to subscribe to',
     )
 
+    use_depth_input_arg = DeclareLaunchArgument(
+        name='use_depth_input',
+        default_value=str(config['use_depth_input']),
+        description='Use depth input for pose estimation',
+        choices=['true', 'false', 'True', 'False']
+    )
+
     depth_image_topic_arg = DeclareLaunchArgument(
         name='depth_image_topic',
         default_value=config['depth_image_topic'],
@@ -74,9 +82,9 @@ def generate_launch_description():
         description='Name of the topic to publish the pose array for visualization of the markers',
     )
 
-    display_image_topic_arg = DeclareLaunchArgument(
-        name='display_image_topic',
-        default_value=config['display_image_topic'],
+    output_image_topic_arg = DeclareLaunchArgument(
+        name='output_image_topic',
+        default_value=config['output_image_topic'],
         description='Name of the topic to publish the image with the detected markers',
     )
 
@@ -87,12 +95,13 @@ def generate_launch_description():
             "marker_size": LaunchConfiguration('marker_size'),
             "aruco_dictionary_id": LaunchConfiguration('aruco_dictionary_id'),
             "image_topic": LaunchConfiguration('image_topic'),
+            "use_depth_input": LaunchConfiguration('use_depth_input'),
             "depth_image_topic": LaunchConfiguration('depth_image_topic'),
             "camera_info_topic": LaunchConfiguration('camera_info_topic'),
             "camera_frame": LaunchConfiguration('camera_frame'),
             "detected_markers_topic": LaunchConfiguration('detected_markers_topic'),
             "markers_visualization_topic": LaunchConfiguration('markers_visualization_topic'),
-            "display_image_topic": LaunchConfiguration('display_image_topic'),
+            "output_image_topic": LaunchConfiguration('output_image_topic'),
         }],
         output='screen',
         emulate_tty=True
@@ -103,7 +112,7 @@ def generate_launch_description():
         [FindPackageShare("realsense2_camera"), "launch", "rs_launch.py"]
     )
 
-    camera_feed_node = IncludeLaunchDescription(
+    camera_feed_depth_node = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(cam_feed_launch_file),
         launch_arguments={
             "pointcloud.enable": "true",
@@ -113,6 +122,16 @@ def generate_launch_description():
             "enable_color": "true",
             "enable_depth": "true",
         }.items(),
+        condition=IfCondition(LaunchConfiguration('use_depth_input'))
+    )
+
+    camera_feed_node = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(cam_feed_launch_file),
+        launch_arguments={
+            "pointcloud.enable": "true",
+            "enable_color": "true",
+        }.items(),
+        condition=UnlessCondition(LaunchConfiguration('use_depth_input'))
     )
 
     rviz_file = PathJoinSubstitution([
@@ -128,16 +147,21 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        # Arguments
         marker_size_arg,
         aruco_dictionary_id_arg,
         image_topic_arg,
+        use_depth_input_arg,
         depth_image_topic_arg,
         camera_info_topic_arg,
         camera_frame_arg,
         detected_markers_topic_arg,
         markers_visualization_topic_arg,
-        display_image_topic_arg,
+        output_image_topic_arg,
+
+        # Nodes
         aruco_node, 
+        camera_feed_depth_node,
         camera_feed_node,
         rviz2_node
     ])
