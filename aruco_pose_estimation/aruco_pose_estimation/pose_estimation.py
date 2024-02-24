@@ -14,10 +14,10 @@ from rclpy.impl import rcutils_logger
 # ROS2 message imports
 from geometry_msgs.msg import Pose
 from geometry_msgs.msg import PoseArray
-from ros2_aruco_interfaces.msg import ArucoMarkers
+from aruco_interfaces.msg import ArucoMarkers
 
 # utils import python code
-from ros2_aruco_pose_estimation.utils import aruco_display
+from aruco_pose_estimation.utils import aruco_display
 
 
 def pose_estimation(rgb_frame: np.array, depth_frame: np.array, aruco_detector: cv2.aruco.ArucoDetector, marker_size: float,

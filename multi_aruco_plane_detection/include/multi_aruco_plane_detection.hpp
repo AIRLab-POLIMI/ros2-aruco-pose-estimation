@@ -7,19 +7,19 @@
 #include <random>
 
 // custom message definition
-#include <ros2_aruco_interfaces/msg/aruco_markers.hpp>
+#include <aruco_interfaces/msg/aruco_markers.hpp>
 
 class MultiArucoPlaneDetection : public rclcpp::Node {
 
 private:
 	// publisher of corrected aruco markers with optimal orientation perpendicular to the best fitting plane
-	rclcpp::Publisher<ros2_aruco_interfaces::msg::ArucoMarkers>::SharedPtr aruco_publisher_;
+	rclcpp::Publisher<aruco_interfaces::msg::ArucoMarkers>::SharedPtr aruco_publisher_;
 
 	// publisher to /viz_markers topic for display of computed plane
 	rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr markers_publisher_;
 
 	// subscription to /aruco_markers topic
-	rclcpp::Subscription<ros2_aruco_interfaces::msg::ArucoMarkers>::SharedPtr aruco_subscription_;
+	rclcpp::Subscription<aruco_interfaces::msg::ArucoMarkers>::SharedPtr aruco_subscription_;
 
 	const std::vector<int> required_markers_ids = {7, 8};					   // markers IDs required for plane detection
 	const std::vector<int> markers_ids = {1, 2, 4, 5, 6, 7, 8};				   // markers IDs available
@@ -54,21 +54,21 @@ public:
 	 * 		  Core thread of the node, it performs the plane detection and publishes the corrected aruco markers.
 	 * @param msg message containing the detected aruco markers array
 	 */
-	void marker_callback(const ros2_aruco_interfaces::msg::ArucoMarkers::SharedPtr msg);
+	void marker_callback(const aruco_interfaces::msg::ArucoMarkers::SharedPtr msg);
 
 	/**
 	 * @brief check if the detected markers are sufficient for plane detection
 	 * @param msg message containing the detected aruco markers array
 	 * @return true if the detected markers are sufficient, false otherwise
 	 */
-	bool areMarkersSufficient(const ros2_aruco_interfaces::msg::ArucoMarkers::SharedPtr msg);
+	bool areMarkersSufficient(const aruco_interfaces::msg::ArucoMarkers::SharedPtr msg);
 
 	/**
 	 * @brief construct a matrix of points from the detected aruco markers
 	 * @param msg message containing the detected aruco markers array
 	 * @return matrix of points, each column is a point [x,y,z]
 	 */
-	Eigen::MatrixXd constructOrderedMatrixFromPoints(const ros2_aruco_interfaces::msg::ArucoMarkers::SharedPtr msg);
+	Eigen::MatrixXd constructOrderedMatrixFromPoints(const aruco_interfaces::msg::ArucoMarkers::SharedPtr msg);
 
 	/**
 	 * @brief compute the best fitting plane passing through all given points using RANSAC

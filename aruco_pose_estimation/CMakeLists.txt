@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(ros2_aruco_pose_estimation)
+project(aruco_pose_estimation)
 
 # Default to C++17
 if(NOT CMAKE_CXX_STANDARD)
@@ -19,7 +19,7 @@ find_package(rclpy REQUIRED)
 #find_package(cv2 REQUIRED)
 #find_package(cv_bridge REQUIRED)
 #find_package(tf_transformations REQUIRED)
-find_package(ros2_aruco_interfaces REQUIRED)
+find_package(aruco_interfaces REQUIRED)
 
 # Install Python modules
 ament_python_install_package(${PROJECT_NAME})

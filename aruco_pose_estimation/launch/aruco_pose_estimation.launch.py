@@ -16,7 +16,7 @@ import yaml
 def generate_launch_description():
 
     aruco_params_file = os.path.join(
-        get_package_share_directory('ros2_aruco_pose_estimation'),
+        get_package_share_directory('aruco_pose_estimation'),
         'config',
         'aruco_parameters.yaml'
     )
@@ -89,7 +89,7 @@ def generate_launch_description():
     )
 
     aruco_node = Node(
-        package='ros2_aruco_pose_estimation',
+        package='aruco_pose_estimation',
         executable='aruco_node.py',
         parameters=[{
             "marker_size": LaunchConfiguration('marker_size'),
@@ -135,7 +135,7 @@ def generate_launch_description():
     )
 
     rviz_file = PathJoinSubstitution([
-        FindPackageShare('ros2_aruco_pose_estimation'),
+        FindPackageShare('aruco_pose_estimation'),
         'rviz',
         'cam_detect.rviz'
     ])

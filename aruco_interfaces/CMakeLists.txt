@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(ros2_aruco_interfaces)
+project(aruco_interfaces)
 
 # Default to C++14
 if(NOT CMAKE_CXX_STANDARD)

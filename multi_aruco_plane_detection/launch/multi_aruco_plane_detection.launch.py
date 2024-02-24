@@ -16,7 +16,7 @@ import yaml
 def generate_launch_description():
 
     aruco_params_file = os.path.join(
-        get_package_share_directory('ros2_aruco_pose_estimation'),
+        get_package_share_directory('aruco_pose_estimation'),
         'config',
         'aruco_parameters.yaml'
     )
@@ -36,9 +36,9 @@ def generate_launch_description():
     aruco_pose_estimation_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([
-                FindPackageShare("ros2_aruco_pose_estimation"),
+                FindPackageShare("aruco_pose_estimation"),
                 "launch",
-                "aruco_recognition.launch.py"])
+                "aruco_pose_estimation.launch.py"])
         )
     )
 

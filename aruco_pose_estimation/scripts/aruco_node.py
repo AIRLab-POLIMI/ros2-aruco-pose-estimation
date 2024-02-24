@@ -13,7 +13,7 @@ Published Topics:
     /aruco_poses (geometry_msgs.msg.PoseArray)
        Pose of all detected markers (suitable for rviz visualization)
 
-    /aruco_markers (ros2_aruco_interfaces.msg.ArucoMarkers)
+    /aruco_markers (aruco_interfaces.msg.ArucoMarkers)
        Provides an array of all poses along with the corresponding
        marker ids.
 
@@ -47,14 +47,14 @@ import numpy as np
 import cv2
 
 # Local imports for custom defined functions
-from ros2_aruco_pose_estimation.utils import ARUCO_DICT
-from ros2_aruco_pose_estimation.pose_estimation import pose_estimation
+from aruco_pose_estimation.utils import ARUCO_DICT
+from aruco_pose_estimation.pose_estimation import pose_estimation
 
 # ROS2 message imports
 from sensor_msgs.msg import CameraInfo
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import PoseArray
-from ros2_aruco_interfaces.msg import ArucoMarkers
+from aruco_interfaces.msg import ArucoMarkers
 from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 
 

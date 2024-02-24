@@ -1,12 +1,14 @@
 # Robust and Noise-Tolerant Plane Detection using Multiple ArUco Markers
 
 Given a multi-aruco setup, consisting of multiple Aruco markers placed on a plane, this package detects the plane 
-of the aruco markers and correct orientation of the multi-aruco setup. The package is designed to be robust to noise 
+of the aruco markers and the correct orientation of the multi-aruco setup. The package is designed to be robust to noise 
 and can handle (in theory) a large number of Aruco markers.
 
-Code developed by: __Simone Giampà, Politecnico di Milano, 2024__
+Code developed by: __Simone Giampà__
 
-Project part of my Master's Thesis at Politecnico di Milano, Italy.
+Project and experimentation conducted at __Politecnico di Milano, Artificial Intelligence and Robotics Laboratory, 2024__
+
+_Project part of my Master's Thesis project at Politecnico di Milano, Italy._
 
 ## Description of the Aruco Setup
 
@@ -43,7 +45,10 @@ Launch the Aruco pose estimator, the camera ROS2 driver node and the multi-aruco
 ros2 launch multi_aruco_plane_detection multi_aruco_plane_detection.launch.py
 ```
 
-## Installation
+The parameters for the aruco detection and pose estimation can be set in the `config/aruco_parameters.yaml` file, 
+or they can be optionally set as command line arguments in the launch file mentioned above.
+
+## Installation: build from source
 
 Install the following dependencies:
 
@@ -55,4 +60,11 @@ Install the Eigen3 library with:
 
 ```bash
 sudo apt install libeigen3-dev
+```
+
+After cloning the repository in your workspace folder, build from source with:
+
+```bash
+colcon build --symlink-install
+source install/setup.bash
 ```

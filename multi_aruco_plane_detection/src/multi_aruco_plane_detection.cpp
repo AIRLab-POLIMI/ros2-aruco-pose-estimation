@@ -8,7 +8,7 @@ MultiArucoPlaneDetection::MultiArucoPlaneDetection(const rclcpp::NodeOptions &no
 	: Node("multi_aruco_plane_detection", node_options) {
 
 	// create a publisher for the corrected aruco markers
-	aruco_publisher_ = this->create_publisher<ros2_aruco_interfaces::msg::ArucoMarkers>(
+	aruco_publisher_ = this->create_publisher<aruco_interfaces::msg::ArucoMarkers>(
 		this->corrected_aruco_markers_topic, 10);
 
 	// create a publisher for the visualization of the plane
@@ -16,7 +16,7 @@ MultiArucoPlaneDetection::MultiArucoPlaneDetection(const rclcpp::NodeOptions &no
 		this->viz_markers_topic, 10);
 
 	// create a subscription to the aruco markers topic for their estimated pose and orientation
-	aruco_subscription_ = this->create_subscription<ros2_aruco_interfaces::msg::ArucoMarkers>(
+	aruco_subscription_ = this->create_subscription<aruco_interfaces::msg::ArucoMarkers>(
 		this->aruco_markers_topic, 10, std::bind(&MultiArucoPlaneDetection::marker_callback, this, std::placeholders::_1));
 
 	// get the name of the camera frame from the launch parameter
@@ -33,7 +33,7 @@ MultiArucoPlaneDetection::MultiArucoPlaneDetection(const rclcpp::NodeOptions &no
  * 		  Core thread of the node, it performs the plane detection and publishes the corrected aruco markers.
  * @param msg message containing the detected aruco markers array
  */
-void MultiArucoPlaneDetection::marker_callback(const ros2_aruco_interfaces::msg::ArucoMarkers::SharedPtr msg) {
+void MultiArucoPlaneDetection::marker_callback(const aruco_interfaces::msg::ArucoMarkers::SharedPtr msg) {
 	// check if the detected markers are sufficient for plane detection
 	bool valid_markers = areMarkersSufficient(msg);
 
@@ -64,7 +64,7 @@ void MultiArucoPlaneDetection::marker_callback(const ros2_aruco_interfaces::msg:
 	}
 
 	// create a corrected aruco marker message and publish it with the corrected orientation
-	ros2_aruco_interfaces::msg::ArucoMarkers corrected_markers(*msg);
+	aruco_interfaces::msg::ArucoMarkers corrected_markers(*msg);
 	for (unsigned int i = 0; i < msg->marker_ids.size(); i++) {
 		// convert eigen quaterniond to geometry_msgs quaternion
 		geometry_msgs::msg::Quaternion quaternion_msg;
@@ -85,7 +85,7 @@ void MultiArucoPlaneDetection::marker_callback(const ros2_aruco_interfaces::msg:
  * @param msg message containing the detected aruco markers array
  * @return true if the detected markers are sufficient, false otherwise
  */
-bool MultiArucoPlaneDetection::areMarkersSufficient(const ros2_aruco_interfaces::msg::ArucoMarkers::SharedPtr msg) {
+bool MultiArucoPlaneDetection::areMarkersSufficient(const aruco_interfaces::msg::ArucoMarkers::SharedPtr msg) {
 	// check whether the message contains at least 3 markers
 	const unsigned int num_markers = msg->marker_ids.size();
 
@@ -130,7 +130,7 @@ bool MultiArucoPlaneDetection::areMarkersSufficient(const ros2_aruco_interfaces:
  * @param msg message containing the detected aruco markers array
  * @return matrix of points, each column is a point [x,y,z]
  */
-Eigen::MatrixXd MultiArucoPlaneDetection::constructOrderedMatrixFromPoints(const ros2_aruco_interfaces::msg::ArucoMarkers::SharedPtr msg) {
+Eigen::MatrixXd MultiArucoPlaneDetection::constructOrderedMatrixFromPoints(const aruco_interfaces::msg::ArucoMarkers::SharedPtr msg) {
 	// create a matrix of points from the markers
 	// order the points in the matrix according to the order of the markers IDs
 	const unsigned int num_markers = msg->marker_ids.size();

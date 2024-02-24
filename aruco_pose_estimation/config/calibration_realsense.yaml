@@ -1,0 +1,35 @@
+# realsense D435 RGB monocular camera calibration parameters
+image_width: 640
+image_height: 480
+camera_name: narrow_stereo
+camera_matrix:
+    rows: 3
+    cols: 3
+    data: [615.95431, 0., 325.26983, 0., 617.92586, 257.57722, 0., 0., 1.]
+distortion_model: plumb_bob
+distortion_coefficients:
+    rows: 1
+    cols: 5
+    data: [0.142588, -0.311967, 0.003950, -0.006346, 0.000000]
+rectification_matrix:
+    rows: 3
+    cols: 3
+    data: [1., 0., 0., 0., 1., 0., 0., 0., 1.]
+projection_matrix:
+    rows: 3
+    cols: 4
+    data:
+        [
+            625.25098,
+            0.,
+            321.66246,
+            0.,
+            0.,
+            628.82343,
+            258.48446,
+            0.,
+            0.,
+            0.,
+            1.,
+            0.,
+        ]

@@ -13,11 +13,11 @@ endif()
 include_directories(include)
 
 find_package(ament_cmake REQUIRED)
-find_package(ros2_aruco_interfaces REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(eigen3_cmake_module REQUIRED)
 find_package(Eigen3 3.3 REQUIRED)
+find_package(aruco_interfaces REQUIRED)
 
 # multi_aruco_plane_detection: given multiple aruco markers, find the best fitting plane the markers lie on
 add_executable(${PROJECT_NAME}
@@ -25,7 +25,7 @@ add_executable(${PROJECT_NAME}
 )
 
 ament_target_dependencies(${PROJECT_NAME}
-    rclcpp ros2_aruco_interfaces visualization_msgs Eigen3
+    rclcpp aruco_interfaces visualization_msgs Eigen3
 )
 
 # required to build cpp code using Eigen library with ROS2
