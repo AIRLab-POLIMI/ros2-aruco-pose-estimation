@@ -28,13 +28,7 @@ $ pip3 install opencv-python opencv-contrib-python transforms3d
 $ sudo apt install ros-iron-tf-transformations
 ```
 
-Build the package from source. To ensure a correct build, it is recommended to build the package `aruco_interfaces` first, 
-and then the whole package:
-
-```bash
-$ colcon build --symlink-install --packages-select aruco_interfaces
-$ colcon build --symlink-install
-```
+Build the package from source with `colcon build --symlink-install` in the workspace root.
 
 ## Aruco Pose Detection and Estimation ROS2 nodes description
 
@@ -81,13 +75,6 @@ Change the parameters directly in the launch file:
 
 ```bash
 ros2 launch aruco_pose_estimation aruco_pose_estimation.launch.py marker_size:=0.1 aruco_dictionary_id:=DICT_5X5_250 camera_frame:=camera_link
-```
-
-To launch the node for multiple markers positioned in a plane, launch the following command to start the node for 
-robust pose and orientation estimation of coplanar markers:
-
-```bash
-ros2 launch multi_aruco_plane_detection multi_aruco_plane_detection.launch.py
 ```
 
 ### Future updates

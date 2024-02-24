@@ -10,6 +10,8 @@
 	<buildtool_depend>ament_cmake</buildtool_depend>
 	<buildtool_depend>ament_cmake_python</buildtool_depend>
 
+	<build_depend>aruco_interfaces</build_depend>
+
 	<depend>rclpy</depend>
 	<depend>geometry_msgs</depend>
 	<depend>std_msgs</depend>
