@@ -28,13 +28,12 @@ ARUCO_DICT = {
 }
 
 
-def aruco_display(corners, ids, rejected, image):
+def aruco_display(corners, ids, image):
     '''
     This function draws the axes on the image for each of the detected markers,
     given the rotation and translation vectors of the input camera image frame.
     :param corners: corners of the detected marker regions
     :param ids: ArUco marker IDs
-    :param rejected: rejected marker candidates
     :param image: input image frame
     :return: RGB image with the axes drawn on it
     '''

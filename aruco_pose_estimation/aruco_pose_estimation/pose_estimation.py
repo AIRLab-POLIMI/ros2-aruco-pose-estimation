@@ -63,13 +63,13 @@ def pose_estimation(rgb_frame: np.array, depth_frame: np.array, aruco_detector: 
             # tvec = tvec[0]
 
             # alternative code version using solvePnP
-            rvec, tvec, markerPoints = my_estimatePoseSingleMarkers(corners=corners[i], marker_size=marker_size,
+            tvec, rvec, quat = my_estimatePoseSingleMarkers(corners=corners[i], marker_size=marker_size,
                                                                     camera_matrix=matrix_coefficients,
                                                                     distortion=distortion_coefficients)
 
             # show the detected markers bounding boxes
             frame_processed = aruco_display(corners=corners, ids=marker_ids,
-                                            rejected=markerPoints, image=frame_processed)
+                                            image=frame_processed)
 
             # draw frame axes
             frame_processed = cv2.drawFrameAxes(image=frame_processed, cameraMatrix=matrix_coefficients,
@@ -84,7 +84,7 @@ def pose_estimation(rgb_frame: np.array, depth_frame: np.array, aruco_detector: 
 
                 # log comparison between depthcloud centroid and tvec estimated positions
                 logger.info(f"depthcloud centroid = {centroid}")
-                logger.info(f"tvec = {tvec[0][0]} {tvec[0][1]} {tvec[0][2]}")
+                logger.info(f"tvec = {tvec[0]} {tvec[1]} {tvec[2]}")
 
             # compute pose from the rvec and tvec arrays
             if (depth_frame is not None):
@@ -96,13 +96,9 @@ def pose_estimation(rgb_frame: np.array, depth_frame: np.array, aruco_detector: 
             else:
                 # use tvec from aruco estimator as estimated pose
                 pose = Pose()
-                pose.position.x = float(tvec[0][0])
-                pose.position.y = float(tvec[0][1])
-                pose.position.z = float(tvec[0][2])
-        
-            rot_matrix = np.eye(4)
-            rot_matrix[0:3, 0:3] = cv2.Rodrigues(np.array(rvec[0]))[0]
-            quat = tf_transformations.quaternion_from_matrix(rot_matrix)
+                pose.position.x = float(tvec[0])
+                pose.position.y = float(tvec[1])
+                pose.position.z = float(tvec[2])
 
             pose.orientation.x = quat[0]
             pose.orientation.y = quat[1]
@@ -117,7 +113,7 @@ def pose_estimation(rgb_frame: np.array, depth_frame: np.array, aruco_detector: 
     return frame_processed, pose_array, markers
 
 
-def my_estimatePoseSingleMarkers(corners, marker_size, camera_matrix, distortion):
+def my_estimatePoseSingleMarkers(corners, marker_size, camera_matrix, distortion) -> tuple[np.array, np.array, np.array]:
     '''
     This will estimate the rvec and tvec for each of the marker corners detected by:
        corners, ids, rejectedImgPoints = detector.detectMarkers(image)
@@ -133,20 +129,22 @@ def my_estimatePoseSingleMarkers(corners, marker_size, camera_matrix, distortion
                               [marker_size / 2.0, -marker_size / 2.0, 0],
                               [-marker_size / 2.0, -marker_size / 2.0, 0]], dtype=np.float32)
 
-    retvals = []
-    rvecs = []
-    tvecs = []
-    for corner in corners:
-        retval, rvec, tvec = cv2.solvePnP(objectPoints=marker_points, imagePoints=corner,
-                                          cameraMatrix=camera_matrix, distCoeffs=distortion, flags=cv2.SOLVEPNP_IPPE_SQUARE)
-        rvecs.append(rvec)
-        tvecs.append(tvec)
-        retvals.append(retval)
+    # solvePnP returns the rotation and translation vectors
+    retval, rvec, tvec = cv2.solvePnP(objectPoints=marker_points, imagePoints=corners,
+                                        cameraMatrix=camera_matrix, distCoeffs=distortion, flags=cv2.SOLVEPNP_IPPE_SQUARE)
+    rvec = rvec.reshape(3, 1)
+    tvec = tvec.reshape(3, 1)
+       
+    rot, jacobian = cv2.Rodrigues(rvec)
+    rot_matrix = np.eye(4, dtype=np.float32)
+    rot_matrix[0:3, 0:3] = rot
 
-    rvecs = np.array(rvecs, dtype=np.float32)
-    tvecs = np.array(tvecs, dtype=np.float32)
-    retvals = np.array(retvals, dtype=np.float32)
-    return rvecs, tvecs, retvals
+    # convert rotation matrix to quaternion
+    quaternion = tf_transformations.quaternion_from_matrix(rot_matrix)
+    norm_quat = np.linalg.norm(quaternion)
+    quaternion = quaternion / norm_quat
+
+    return tvec, rvec, quaternion
 
 
 def depth_to_pointcloud_centroid(depth_image: np.array, intrinsic_matrix: np.array,

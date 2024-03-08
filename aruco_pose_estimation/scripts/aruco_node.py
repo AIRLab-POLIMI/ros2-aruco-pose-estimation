@@ -67,7 +67,6 @@ class ArucoNode(rclpy.node.Node):
         # Make sure we have a valid dictionary id:
         try:
             dictionary_id = cv2.aruco.__getattribute__(self.dictionary_id_name)
-            # if type(dictionary_id) != type(cv2.aruco.DICT_5X5_100):
             # check if the dictionary_id is a valid dictionary inside ARUCO_DICT values
             if dictionary_id not in ARUCO_DICT.values():
                 raise AttributeError
@@ -91,9 +90,9 @@ class ArucoNode(rclpy.node.Node):
 
             # create a message filter to synchronize the image and depth image topics
             self.image_sub = message_filters.Subscriber(self, Image, self.image_topic,
-                                                    qos_profile=qos_profile_sensor_data)
+                                                        qos_profile=qos_profile_sensor_data)
             self.depth_image_sub = message_filters.Subscriber(self, Image, self.depth_image_topic,
-                                                            qos_profile=qos_profile_sensor_data)
+                                                              qos_profile=qos_profile_sensor_data)
 
             # create synchronizer between the 2 topics using message filters and approximate time policy
             # slop is the maximum time difference between messages that are considered synchronized
@@ -108,7 +107,6 @@ class ArucoNode(rclpy.node.Node):
             self.image_sub = self.create_subscription(
                 Image, self.image_topic, self.image_callback, qos_profile_sensor_data
             )
-        
 
         # Set up publishers
         self.poses_pub = self.create_publisher(PoseArray, self.markers_visualization_topic, 10)
@@ -149,7 +147,7 @@ class ArucoNode(rclpy.node.Node):
         if self.info_msg is None:
             self.get_logger().warn("No camera info has been received!")
             return
-        
+
         # convert the image messages to cv2 format
         cv_image = self.bridge.imgmsg_to_cv2(img_msg, desired_encoding="rgb8")
 
@@ -168,6 +166,14 @@ class ArucoNode(rclpy.node.Node):
         markers.header.stamp = img_msg.header.stamp
         pose_array.header.stamp = img_msg.header.stamp
 
+        """
+        # OVERRIDE: use calibrated intrinsic matrix and distortion coefficients
+        self.intrinsic_mat = np.reshape([615.95431, 0., 325.26983,
+                                         0., 617.92586, 257.57722,
+                                         0., 0., 1.], (3, 3))
+        self.distortion = np.array([0.142588, -0.311967, 0.003950, -0.006346, 0.000000])
+        """
+        
         # call the pose estimation function
         frame, pose_array, markers = pose_estimation(rgb_frame=cv_image, depth_frame=None,
                                                      aruco_detector=self.aruco_detector,
@@ -182,7 +188,6 @@ class ArucoNode(rclpy.node.Node):
 
         # publish the image frame with computed markers positions over the image
         self.image_pub.publish(self.bridge.cv2_to_imgmsg(frame, "rgb8"))
-        
 
     def depth_image_callback(self, depth_msg: Image):
         if self.info_msg is None:
