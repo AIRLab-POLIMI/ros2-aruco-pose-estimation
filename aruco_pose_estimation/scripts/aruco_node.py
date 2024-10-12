@@ -56,7 +56,7 @@ from sensor_msgs.msg import Image
 from geometry_msgs.msg import PoseArray
 from aruco_interfaces.msg import ArucoMarkers
 from rcl_interfaces.msg import ParameterDescriptor, ParameterType
-
+from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSReliabilityPolicy, QoSHistoryPolicy
 
 class ArucoNode(rclpy.node.Node):
     def __init__(self):
@@ -92,7 +92,7 @@ class ArucoNode(rclpy.node.Node):
             self.image_sub = message_filters.Subscriber(self, Image, self.image_topic,
                                                         qos_profile=qos_profile_sensor_data)
             self.depth_image_sub = message_filters.Subscriber(self, Image, self.depth_image_topic,
-                                                              qos_profile=qos_profile_sensor_data)
+                                                              qos_profile=QoSProfile(history=QoSHistoryPolicy.KEEP_LAST, depth=1))
 
             # create synchronizer between the 2 topics using message filters and approximate time policy
             # slop is the maximum time difference between messages that are considered synchronized
@@ -105,7 +105,8 @@ class ArucoNode(rclpy.node.Node):
 
             # create a subscription to the image topic
             self.image_sub = self.create_subscription(
-                Image, self.image_topic, self.image_callback, qos_profile_sensor_data
+                Image, self.image_topic, self.image_callback, 
+                qos_profile=QoSProfile(history=QoSHistoryPolicy.KEEP_LAST, depth=1)
             )
 
         # Set up publishers
