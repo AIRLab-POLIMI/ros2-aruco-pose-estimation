@@ -7,6 +7,7 @@
 import numpy as np
 import cv2
 import tf_transformations
+from scipy.spatial.transform import Rotation as R
 
 # ROS2 imports
 from rclpy.impl import rcutils_logger
@@ -50,7 +51,7 @@ def pose_estimation(rgb_frame: np.array, depth_frame: np.array, aruco_detector: 
     # If markers are detected
     if len(corners) > 0:
 
-        logger.debug("Detected {} markers.".format(len(corners)))
+        logger.info("Detected {} markers.".format(len(corners)))
 
         for i, marker_id in enumerate(marker_ids):
             # Estimate pose of each marker and return the values rvec and tvec
@@ -78,21 +79,25 @@ def pose_estimation(rgb_frame: np.array, depth_frame: np.array, aruco_detector: 
 
             if (depth_frame is not None):
                 # get the centroid of the pointcloud
-                centroid = depth_to_pointcloud_centroid(depth_image=depth_frame,
+                centroid, quat_pc = depth_to_pointcloud_centroid(depth_image=depth_frame,
                                                         intrinsic_matrix=matrix_coefficients,
                                                         corners=corners[i])
 
                 # log comparison between depthcloud centroid and tvec estimated positions
                 logger.info(f"depthcloud centroid = {centroid}")
+                logger.info(f"depthcloud rotation = {quat_pc[0]} {quat_pc[1]} {quat_pc[2]} {quat_pc[3]}")
                 logger.info(f"tvec = {tvec[0]} {tvec[1]} {tvec[2]}")
-
-            # compute pose from the rvec and tvec arrays
-            if (depth_frame is not None):
+                logger.info(f"quat = {quat[0]} {quat[1]} {quat[2]} {quat[3]}")
+            
                 # use computed centroid from depthcloud as estimated pose
                 pose = Pose()
                 pose.position.x = float(centroid[0])
                 pose.position.y = float(centroid[1])
                 pose.position.z = float(centroid[2])
+                pose.orientation.x = quat_pc[0]
+                pose.orientation.y = quat_pc[1]
+                pose.orientation.z = quat_pc[2]
+                pose.orientation.w = quat_pc[3]
             else:
                 # use tvec from aruco estimator as estimated pose
                 pose = Pose()
@@ -100,10 +105,10 @@ def pose_estimation(rgb_frame: np.array, depth_frame: np.array, aruco_detector: 
                 pose.position.y = float(tvec[1])
                 pose.position.z = float(tvec[2])
 
-            pose.orientation.x = quat[0]
-            pose.orientation.y = quat[1]
-            pose.orientation.z = quat[2]
-            pose.orientation.w = quat[3]
+                pose.orientation.x = quat[0]
+                pose.orientation.y = quat[1]
+                pose.orientation.z = quat[2]
+                pose.orientation.w = quat[3]
 
             # add the pose and marker id to the pose_array and markers messages
             pose_array.poses.append(pose)
@@ -163,7 +168,10 @@ def depth_to_pointcloud_centroid(depth_image: np.array, intrinsic_matrix: np.arr
 
     # Get image parameters
     height, width = depth_image.shape
-    
+    if depth_image.dtype == np.uint16:
+        scale = 1000.0 # Convert from mm to meters
+    elif depth_image.dtype == np.float32:
+        scale = 1.0 # Already in meters
 
     # Check if all corners are within image bounds
     # corners has shape (1, 4, 2)
@@ -172,54 +180,48 @@ def depth_to_pointcloud_centroid(depth_image: np.array, intrinsic_matrix: np.arr
     for x, y in corners_indices:
         if x < 0 or x >= width or y < 0 or y >= height:
             raise ValueError("One or more corners are outside the image bounds.")
+    # Create a mask for the polygon
+    mask = np.zeros_like(depth_image, dtype=np.uint8)
+    cv2.fillPoly(mask, [corners_indices], 1)
 
-    # bounding box of the polygon
-    x_min = int(min(corners_indices[:, 0]))
-    x_max = int(max(corners_indices[:, 0]))
-    y_min = int(min(corners_indices[:, 1]))
-    y_max = int(max(corners_indices[:, 1]))
+    # Extract the depth values within the polygon
+    depth_values = depth_image[mask == 1]
 
-    # create array of pixels inside the polygon defined by the corners
-    # search for pixels inside the squared bounding box of the polygon
-    points = []
-    for x in range(x_min, x_max):
-        for y in range(y_min, y_max):
-            if is_pixel_in_polygon(pixel=(x, y), corners=corners_indices):
-                # add point to the list of points
-                points.append([x, y, depth_image[y, x]])
+    # Filter out zero depth values
+    depth_values = depth_values[depth_values > 0]
 
-    # Convert points to numpy array
-    points = np.array(points, dtype=np.uint16)
-   
-    # convert to open3d image
-    #depth_segmented = geometry.Image(points)
-    # create pinhole camera model
-    #pinhole_matrix = camera.PinholeCameraIntrinsic(width=width, height=height, 
-    #                                               intrinsic_matrix=intrinsic_matrix)
-    # Convert points to Open3D pointcloud
-    #pointcloud = geometry.PointCloud.create_from_depth_image(depth=depth_segmented, intrinsic=pinhole_matrix,
-    #                                                         depth_scale=1000.0)
+    # Calculate the centroid of the depth values
+    if len(depth_values) == 0:
+        raise ValueError("No valid depth values found within the polygon.")
+    # Calculate the 3D coordinates of the centroid
+    centroid_z = np.mean(depth_values) / scale  
 
-    # apply formulas to pointcloud, where 
-    # fx = intrinsic_matrix[0, 0], fy = intrinsic_matrix[1, 1]
-    # cx = intrinsic_matrix[0, 2], cy = intrinsic_matrix[1, 2], 
-    # u = x, v = y, d = depth_image[y, x], depth_scale = 1000.0,
-    # z = d / depth_scale
-    # x = (u - cx) * z / fx
-    # y = (v - cy) * z / fy
+    # Convert the 2D centroid to 3D coordinates using the intrinsic matrix
+    centroid_x = (np.mean(corners_indices[:, 0]) - intrinsic_matrix[0, 2]) * centroid_z / intrinsic_matrix[0, 0]
+    centroid_y = (np.mean(corners_indices[:, 1]) - intrinsic_matrix[1, 2]) * centroid_z / intrinsic_matrix[1, 1]
+    centroid = np.array([centroid_x, centroid_y, centroid_z])
+    
+    # Rotation estimation. Should possible change this with plane fitting of the points in the polygon   
+    corner_points = []
+    for idx in corners_indices:
+        x,y = idx
+        z = depth_image[y, x] / scale
+        x_3d = (x - intrinsic_matrix[0, 2]) * z / intrinsic_matrix[0, 0]
+        y_3d = (y - intrinsic_matrix[1, 2]) * z / intrinsic_matrix[1, 1]
+        corner_points.append([x_3d, y_3d, z])
+    (topLeft, topRight, bottomRight, bottomLeft) = np.array(corner_points)
+    y_mid = 0.5*(topLeft + topRight)
+    x_mid = 0.5*(topRight + bottomRight)
+    x_axis = x_mid - centroid
+    x_axis = x_axis / np.linalg.norm(x_axis)
+    y_axis = y_mid - centroid
+    y_axis = y_axis / np.linalg.norm(y_axis)
+    z_axis = np.cross(x_axis, y_axis)
+    z_axis = z_axis / np.linalg.norm(z_axis)
 
-    # create pointcloud
-    pointcloud = []
-    for x, y, d in points:
-        z = d / 1000.0
-        x = (x - intrinsic_matrix[0, 2]) * z / intrinsic_matrix[0, 0]
-        y = (y - intrinsic_matrix[1, 2]) * z / intrinsic_matrix[1, 1]
-        pointcloud.append([x, y, z])
+    rotation_matrix = np.vstack([x_axis, y_axis, z_axis]).T
 
-    # Calculate centroid from pointcloud
-    centroid = np.mean(np.array(pointcloud, dtype=np.uint16), axis=0)
-
-    return centroid
+    return centroid, R.from_matrix(rotation_matrix).as_quat()
 
 
 def is_pixel_in_polygon(pixel: tuple, corners: np.array) -> bool:

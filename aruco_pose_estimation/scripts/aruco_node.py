@@ -197,7 +197,7 @@ class ArucoNode(rclpy.node.Node):
     def rgb_depth_sync_callback(self, rgb_msg: Image, depth_msg: Image):
 
         # convert the image messages to cv2 format
-        cv_depth_image = self.bridge.imgmsg_to_cv2(depth_msg, desired_encoding="16UC1")
+        cv_depth_image = self.bridge.imgmsg_to_cv2(depth_msg, desired_encoding="passthrough")
         cv_image = self.bridge.imgmsg_to_cv2(rgb_msg, desired_encoding="rgb8")
 
         # create the ArucoMarkers and PoseArray messages

@@ -1,4 +1,4 @@
-# Aruco Pose Estimation with ROS2, using RGB and Depth camera images from Realsense D435
+# Aruco Pose Estimation with ROS2, using RGB and Depth camera images
 
 Code developed by: __Simone Giampà__
 
@@ -10,13 +10,12 @@ ROS2 wrapper for Aruco marker detection and pose estimation, using OpenCV librar
 done using RGB and optionally Depth images. This package works for ROS2 Humble and Iron.
 
 This package allows to use cameras to detect Aruco markers and estimate their poses. It allows to use any camera with ROS2 drivers.
-The code is a ROS2 publisher-subscriber working with RGB camera images for marker detection and RGB or depth images for pose estimation. 
-It also allows using multiple aruco markers at the same time, and each of them will be published as a separate pose. 
+The code is a ROS2 publisher-subscriber working with RGB camera images for marker detection and RGB or depth images for pose estimation.
+It also allows using multiple aruco markers at the same time, and each of them will be published as a separate pose.
 The code supports many different Aruco dictionaries and sizes of markers.
 
-This package was tested for the Realsense D435 camera, compatible with ROS2 `realsense-ros` driver,
-available at [ros2_intel_realsense](https://github.com/IntelRealSense/realsense-ros). The code should work equally well on other and
-different cameras, provided a proper calibration of the camera parameters.
+This package was tested for the Realsense D435 camera, compatible with ROS2 `realsense-ros` driver, available at [ros2_intel_realsense](https://github.com/IntelRealSense/realsense-ros), as well as with the [StereoLabs ZED2 camera](https://www.stereolabs.com/en-de/products/zed-2), using the [`zed-ros2-wrapper`](https://github.com/stereolabs/zed-ros2-wrapper).
+The code should work equally well on other and different cameras, provided a proper calibration of the camera parameters.
 
 ## Installation
 
@@ -25,7 +24,7 @@ This package depends on a recent version of OpenCV python library and transforms
 ```bash
 $ pip3 install opencv-python opencv-contrib-python transforms3d
 
-$ sudo apt install ros-iron-tf-transformations
+$ sudo apt install ros-iron-tf-transformations # Replace iron with the corresponding ros distro
 ```
 
 Build the package from source with `colcon build --symlink-install` in the workspace root.
@@ -64,7 +63,7 @@ __Parameters__ for the node can be set in the `config/aruco_parameters.yaml` fil
 
 ## Running Marker Detection for Pose Estimation
 
-Launch the aruco pose estimation node with this command. The parameters will be loaded from _aruco\_parameters.yaml_,
+Launch the aruco pose estimation node with this command. The parameters will be loaded from [`aruco\_parameters.yaml`](aruco_pose_estimation/config/aruco_parameters.yaml),
 but can also be changed directly in the launch file with command line arguments.
 
 ```bash
